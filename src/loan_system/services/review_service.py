@@ -26,6 +26,7 @@ from loan_system.services.audit_service import AuditService
 from loan_system.services.auth_service import CurrentUser
 from loan_system.services.notification_service import NotificationService
 from loan_system.services.scoring_service import ScoringService
+from loan_system.services.segregation import SegregationOfDuties
 
 
 class NotReviewable(Exception):
@@ -38,10 +39,6 @@ class AlreadyReceived(Exception):
 
 class NotTheReceiver(Exception):
     """Chỉ Người tiếp nhận mới được kiểm tra hồ sơ vay này."""
-
-
-class SodViolation(Exception):
-    """Vi phạm phân tách nhiệm vụ (BR06, SUC01)."""
 
 
 class DocumentNotFound(Exception):
@@ -73,13 +70,13 @@ class ReviewService:
         self._applications = ApplicationService(db, clock, settings, sms, ip)
         self._notifications = NotificationService(db, clock, sms)
         self._scoring = ScoringService(db, clock, settings, sms, cic, ip)
+        self._sod = SegregationOfDuties(db, clock, sms, ip)
         self._audit = AuditService(db, clock)
         self._ip = ip
 
     def claim(self, user: CurrentUser, application_id: uuid.UUID) -> ApplicationView:
         application = self._submitted(user, application_id)
-        if application.created_by == user.employee_id:
-            self._sod_violation(user, application)
+        self._sod.enforce(user, application, "RECEIVE", [application.created_by])
         if application.received_by not in (None, user.employee_id):
             raise AlreadyReceived
         application.received_by = user.employee_id
@@ -174,12 +171,3 @@ class ReviewService:
         if application.received_by != user.employee_id:
             raise NotTheReceiver
         return application
-
-    def _sod_violation(self, user: CurrentUser, application: LoanApplication) -> None:
-        self._audit.log(
-            "SOD_VIOLATION", actor_id=user.user_id, target_type="LOAN_APPLICATION",
-            target_id=application.id, ip_address=self._ip, level="WARNING",
-            detail="creator cannot receive",
-        )
-        self._db.commit()
-        raise SodViolation

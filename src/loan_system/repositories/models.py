@@ -234,6 +234,9 @@ class LoanApplication(Base):
     policy_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("approval_policies.id"))
     cic_missing: Mapped[bool] = mapped_column(Boolean, default=False)  # Thiếu dữ liệu CIC
     fraud_suspected: Mapped[bool] = mapped_column(Boolean, default=False)  # ADR 0002
+    # Người thẩm định (UC22 bước 1) và số lượt phê duyệt chốt theo hạn mức đề xuất (bước 6).
+    appraised_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("employees.id"))
+    required_approvals: Mapped[int | None] = mapped_column(SmallInteger)
 
     __mapper_args__ = {"version_id_col": version}
 
@@ -428,3 +431,49 @@ class CreditScoreRecord(Base):
     factors_json: Mapped[str] = mapped_column(NVARCHAR(None))
     model_version: Mapped[str | None] = mapped_column(String(20))  # SR13
     scored_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
+
+
+class ApprovalPolicyTier(Base):
+    """Số lượt phê duyệt theo khoảng hạn mức của một phiên bản chính sách (BR05)."""
+
+    __tablename__ = "approval_policy_tiers"
+    __table_args__ = (
+        CheckConstraint(
+            "required_approvals >= 1", name="ck_approval_policy_tiers_required_approvals"
+        ),
+        CheckConstraint("min_amount <= max_amount", name="ck_approval_policy_tiers_range"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
+    policy_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("approval_policies.id"))
+    min_amount: Mapped[Decimal] = mapped_column(Money())
+    max_amount: Mapped[Decimal] = mapped_column(Money())
+    required_approvals: Mapped[int] = mapped_column(SmallInteger)
+
+
+class AppraisalReport(Base):
+    """Tờ trình thẩm định (UC22); bị Trả về thì lập tờ trình mới, bản mới nhất có hiệu lực."""
+
+    __tablename__ = "appraisal_reports"
+    __table_args__ = (
+        CheckConstraint(
+            "recommendation IN ('APPROVE','REJECT')", name="ck_appraisal_reports_recommendation"
+        ),
+        CheckConstraint(
+            "recommendation = 'REJECT'"
+            " OR (proposed_amount IS NOT NULL AND proposed_term IS NOT NULL AND dti IS NOT NULL)",
+            name="ck_appraisal_reports_proposal",
+        ),
+        Index("ix_appraisal_reports_application", "application_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
+    application_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("loan_applications.id"))
+    appraiser_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("employees.id"))
+    recommendation: Mapped[str] = mapped_column(String(10))
+    proposed_amount: Mapped[Decimal | None] = mapped_column(Money())
+    proposed_term: Mapped[int | None] = mapped_column(SmallInteger)
+    dti: Mapped[Decimal | None] = mapped_column(DECIMAL(9, 4))  # theo lãi suất của Hạng thật
+    fraud_suspected: Mapped[bool] = mapped_column(Boolean, default=False)  # UC22 3a
+    comment: Mapped[str] = mapped_column(NVARCHAR(1000))
+    created_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)

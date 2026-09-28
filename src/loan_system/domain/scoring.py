@@ -102,21 +102,23 @@ def fraud_suspected(declared_debt: Decimal, cic_obligation: Decimal | None) -> b
     )
 
 
-def scoring_dti(
+def loan_dti(
     *,
     monthly_income: Decimal,
     declared_debt: Decimal,
     cic_obligation: Decimal | None,
     amount: Decimal,
     term_months: int,
-    ceiling_rate: Decimal,
+    annual_rate: Decimal,
 ) -> Decimal:
-    """DTI lúc chấm điểm: theo lãi suất trần (lãi suất hạng C của chính sách) vì chưa có Hạng
-    (ADR 0001), nghĩa vụ nợ hiện có lấy max(khai báo, CIC) (ADR 0002)."""
+    """DTI của khoản vay mới; nghĩa vụ nợ hiện có lấy max(khai báo, CIC) (ADR 0002).
+
+    Lúc chấm điểm dùng lãi suất trần (lãi suất hạng C của chính sách) vì chưa có Hạng; lúc thẩm
+    định dùng lãi suất của Hạng thật với hạn mức, kỳ hạn đề xuất (ADR 0001)."""
     return calculate_dti(
         monthly_income,
         existing_monthly_obligation(declared_debt, cic_obligation),
-        annuity_payment(amount, ceiling_rate, term_months),
+        annuity_payment(amount, annual_rate, term_months),
     )
 
 

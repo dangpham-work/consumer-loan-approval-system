@@ -10,6 +10,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
 from loan_system.domain.applications import InvalidTransition
+from loan_system.domain.appraisal import InvalidProposal, NoApprovalTier
 from loan_system.domain.documents import InvalidDocument
 from loan_system.services.application_service import (
     ApplicationInProgress,
@@ -23,6 +24,13 @@ from loan_system.services.application_service import (
     NotRequested,
     TooManyDocuments,
 )
+from loan_system.services.appraisal_service import (
+    AlreadyAppraised,
+    DocumentNotViewable,
+    DtiTooHigh,
+    NotAppraisable,
+    NotTheAppraiser,
+)
 from loan_system.services.audit_query_service import ExportTooLarge
 from loan_system.services.counter_service import DuplicateCustomer
 from loan_system.services.customer_service import ContactTaken, IncomeLocked
@@ -34,8 +42,8 @@ from loan_system.services.review_service import (
     DocumentsNotAccepted,
     NotReviewable,
     NotTheReceiver,
-    SodViolation,
 )
+from loan_system.services.segregation import SodViolation
 
 FIXED: dict[type[Exception], tuple[int, str]] = {
     ApplicationNotFound: (status.HTTP_404_NOT_FOUND, "Không tìm thấy hồ sơ vay"),
@@ -75,6 +83,20 @@ FIXED: dict[type[Exception], tuple[int, str]] = {
     SodViolation: (
         status.HTTP_403_FORBIDDEN, "Thao tác vi phạm nguyên tắc phân tách nhiệm vụ"
     ),
+    NotAppraisable: (status.HTTP_409_CONFLICT, "Hồ sơ vay không ở trạng thái Đang thẩm định"),
+    AlreadyAppraised: (
+        status.HTTP_409_CONFLICT, "Hồ sơ vay đã được chuyên viên khác thẩm định"
+    ),
+    NotTheAppraiser: (status.HTTP_403_FORBIDDEN, "Chỉ người thẩm định mới thực hiện được"),
+    DtiTooHigh: (
+        status.HTTP_400_BAD_REQUEST,
+        "DTI với hạn mức, kỳ hạn đề xuất vượt 50%. Vui lòng giảm hạn mức hoặc tăng kỳ hạn.",
+    ),
+    DocumentNotViewable: (status.HTTP_409_CONFLICT, "Không hiển thị được giấy tờ này"),
+    NoApprovalTier: (
+        status.HTTP_409_CONFLICT,
+        "Chính sách phê duyệt không áp dụng được cho hạn mức này. Vui lòng báo quản trị viên.",
+    ),
     ExportTooLarge: (
         status.HTTP_409_CONFLICT,
         "Kết quả lọc có quá nhiều dòng để xuất CSV. Vui lòng thu hẹp bộ lọc.",
@@ -91,6 +113,7 @@ FIXED: dict[type[Exception], tuple[int, str]] = {
 OWN_MESSAGE: dict[type[Exception], int] = {
     InvalidDocument: status.HTTP_400_BAD_REQUEST,
     ChallengeFailed: status.HTTP_400_BAD_REQUEST,
+    InvalidProposal: status.HTTP_400_BAD_REQUEST,
 }
 
 

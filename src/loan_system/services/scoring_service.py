@@ -27,7 +27,7 @@ from loan_system.domain.scoring import (
     RuleBasedScoringModel,
     fraud_suspected,
     knock_out,
-    scoring_dti,
+    loan_dti,
 )
 from loan_system.repositories.models import (
     ApprovalPolicy,
@@ -118,13 +118,13 @@ class ScoringService:
             # BR01: tuổi tại thời điểm nộp hồ sơ vay.
             age=age_on(customer.dob, (application.submitted_at or self._clock.now()).date()),
             monthly_income=income,
-            dti=scoring_dti(
+            dti=loan_dti(
                 monthly_income=income,
                 declared_debt=declared,
                 cic_obligation=obligation,
                 amount=application.requested_amount,
                 term_months=application.term_months,
-                ceiling_rate=policy.ceiling_rate,
+                annual_rate=policy.ceiling_rate,
             ),
             cic_debt_group=report.highest_debt_group if report else None,
             employment_years=customer.employment_years or 0,
@@ -273,41 +273,52 @@ class ScoringService:
     # --- UC20 ---------------------------------------------------------------------------------
 
     def explain(self, user: CurrentUser, application_id: uuid.UUID) -> ScoreView:
-        application = self._applications.load(user, application_id)
-        record = self._db.scalars(
-            select(CreditScoreRecord)
-            .where(CreditScoreRecord.application_id == application.id)
-            .order_by(CreditScoreRecord.scored_at.desc())
-        ).first()
-        if record is None:
-            raise ScoreNotFound
-        cic = self._db.scalars(
-            select(CicReportRecord)
-            .where(CicReportRecord.application_id == application.id)
-            .order_by(CicReportRecord.queried_at.desc())
-        ).first()
-        factors = tuple(FactorScore(**f) for f in json.loads(record.factors_json))
-        result = CreditScore(
-            record.score, record.grade, record.knock_out_reason, factors, record.model_version
-        )
-        return ScoreView(
-            score=record.score,
-            grade=record.grade,
-            knock_out_reason=record.knock_out_reason,
-            dti=record.dti,
-            factors=list(factors),
-            top_factors=[f.code for f in result.top_factors],
-            model_version=record.model_version,
-            scored_at=record.scored_at,
-            annual_rate=application.annual_rate,
-            cic_missing=application.cic_missing,
-            fraud_suspected=application.fraud_suspected,
-            cic=(
-                CicView(
-                    cic.highest_debt_group, cic.total_outstanding, cic.lender_count,
-                    cic.monthly_obligation, cic.queried_at,
-                )
-                if cic is not None and not application.cic_missing
-                else None
-            ),
-        )
+        return explain_score(self._db, self._applications.load(user, application_id))
+
+
+def latest_cic_report(db: Session, application: LoanApplication) -> CicReportRecord | None:
+    """Báo cáo CIC đang dùng cho hồ sơ vay; None khi Thiếu dữ liệu CIC."""
+    if application.cic_missing:
+        return None
+    return db.scalars(
+        select(CicReportRecord)
+        .where(CicReportRecord.application_id == application.id)
+        .order_by(CicReportRecord.queried_at.desc())
+    ).first()
+
+
+def explain_score(db: Session, application: LoanApplication) -> ScoreView:
+    """Kết quả chấm điểm mới nhất kèm giải thích (UC20); người gọi đã kiểm tra quyền xem."""
+    record = db.scalars(
+        select(CreditScoreRecord)
+        .where(CreditScoreRecord.application_id == application.id)
+        .order_by(CreditScoreRecord.scored_at.desc())
+    ).first()
+    if record is None:
+        raise ScoreNotFound
+    cic = latest_cic_report(db, application)
+    factors = tuple(FactorScore(**f) for f in json.loads(record.factors_json))
+    result = CreditScore(
+        record.score, record.grade, record.knock_out_reason, factors, record.model_version
+    )
+    return ScoreView(
+        score=record.score,
+        grade=record.grade,
+        knock_out_reason=record.knock_out_reason,
+        dti=record.dti,
+        factors=list(factors),
+        top_factors=[f.code for f in result.top_factors],
+        model_version=record.model_version,
+        scored_at=record.scored_at,
+        annual_rate=application.annual_rate,
+        cic_missing=application.cic_missing,
+        fraud_suspected=application.fraud_suspected,
+        cic=(
+            CicView(
+                cic.highest_debt_group, cic.total_outstanding, cic.lender_count,
+                cic.monthly_obligation, cic.queried_at,
+            )
+            if cic is not None
+            else None
+        ),
+    )

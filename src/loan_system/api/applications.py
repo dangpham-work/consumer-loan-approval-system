@@ -1,4 +1,5 @@
-"""Hồ sơ vay: UC12–UC17 (màn hình M02, M03, M05), UC20 Giải thích kết quả chấm điểm.
+"""Hồ sơ vay: UC12–UC17 (màn hình M02, M03, M05), UC20 Giải thích kết quả chấm điểm, UC22 Thẩm
+định (M06).
 
 Lỗi nghiệp vụ được đổi sang mã HTTP ở `api/errors.py`.
 """
@@ -8,8 +9,19 @@ from collections.abc import Callable
 from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Literal
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+    status,
+)
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from loan_system.api.access import FORBIDDEN_MESSAGE, Auth, enforce_rate_limit, require
@@ -25,6 +37,7 @@ from loan_system.domain.applications import (
     DocumentVerdict,
     Purpose,
 )
+from loan_system.domain.appraisal import Proposal, Recommendation
 from loan_system.domain.documents import MAX_DOCUMENT_BYTES
 from loan_system.services.application_service import (
     ApplicationService,
@@ -32,6 +45,7 @@ from loan_system.services.application_service import (
     DraftChanges,
     LoanTerms,
 )
+from loan_system.services.appraisal_service import AppraisalService, AppraisalView
 from loan_system.services.auth_service import CurrentUser
 from loan_system.services.counter_service import CounterService
 from loan_system.services.review_service import InfoRequest, ReviewService
@@ -73,6 +87,7 @@ Viewer = Annotated[CurrentUser, Depends(require("APPLICATION_VIEW"))]
 Verifier = Annotated[CurrentUser, Depends(require("APPLICATION_VERIFY"))]
 InfoRequester = Annotated[CurrentUser, Depends(require("APPLICATION_REQUEST_INFO"))]
 ScoreViewer = Annotated[CurrentUser, Depends(require("CREDIT_SCORE_VIEW"))]
+Appraiser = Annotated[CurrentUser, Depends(require("APPRAISAL_SUBMIT"))]
 
 
 def _applications(db: Db, ctx: Ctx, ip: ClientIp) -> ApplicationService:
@@ -91,10 +106,15 @@ def _scoring(db: Db, ctx: Ctx, ip: ClientIp) -> ScoringService:
     return ScoringService(db, ctx.clock, ctx.settings, ctx.sms, ctx.cic, ip)
 
 
+def _appraisals(db: Db, ctx: Ctx, ip: ClientIp) -> AppraisalService:
+    return AppraisalService(db, ctx.clock, ctx.settings, ctx.sms, ctx.limits.pii_view, ip)
+
+
 Applications = Annotated[ApplicationService, Depends(_applications)]
 Reviews = Annotated[ReviewService, Depends(_reviews)]
 Counter = Annotated[CounterService, Depends(_counter)]
 Scoring = Annotated[ScoringService, Depends(_scoring)]
+Appraisals = Annotated[AppraisalService, Depends(_appraisals)]
 
 
 # Mọi schema đầu vào chỉ nhận trường khai báo; trường thừa như status, customer_id, code bị bỏ
@@ -276,6 +296,42 @@ class ScoreResponse(BaseModel):
     cic: CicResponse | None
 
 
+class AppraisalRequest(BaseModel):
+    recommendation: Recommendation
+    proposed_amount: Amount | None = None
+    proposed_term: Term | None = None
+    fraud_suspected: bool = False  # UC22 3a: mô tả nghi vấn ghi trong nhận xét
+    comment: str = Field(max_length=1000)
+
+
+class ReportResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    recommendation: str
+    proposed_amount: Decimal | None
+    proposed_term: int | None
+    dti: Decimal | None
+    fraud_suspected: bool
+    comment: str
+    created_at: datetime
+
+
+class AppraisalResponse(ApplicationResponse):
+    score: ScoreResponse
+    annual_rate: Decimal | None
+    required_approvals: int | None
+    report: ReportResponse | None
+
+
+class DtiPreviewResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    annual_rate: Decimal
+    monthly_payment: Decimal
+    dti: Decimal
+    within_limit: bool
+
+
 def respond(view: ApplicationView) -> ApplicationResponse:
     return ApplicationResponse.model_validate(view)
 
@@ -431,3 +487,64 @@ def request_info(
 @router.get("/{application_id}/score", response_model=ScoreResponse)
 def get_score(application_id: uuid.UUID, user: ScoreViewer, scoring: Scoring) -> ScoreResponse:
     return ScoreResponse.model_validate(scoring.explain(user, application_id))
+
+
+# --- UC22: thẩm định hồ sơ vay (M06) ----------------------------------------------------------
+
+
+def respond_appraisal(view: AppraisalView) -> AppraisalResponse:
+    return AppraisalResponse(
+        **respond(view.application).model_dump(),
+        score=ScoreResponse.model_validate(view.score),
+        annual_rate=view.annual_rate,
+        required_approvals=view.required_approvals,
+        report=ReportResponse.model_validate(view.report) if view.report else None,
+    )
+
+
+@router.post("/{application_id}/appraisal/open", response_model=AppraisalResponse)
+def open_appraisal(
+    application_id: uuid.UUID, user: Appraiser, appraisals: Appraisals
+) -> AppraisalResponse:
+    return respond_appraisal(appraisals.open(user, application_id))
+
+
+@router.get("/{application_id}/appraisal/dti", response_model=DtiPreviewResponse)
+def preview_dti(
+    application_id: uuid.UUID,
+    user: Appraiser,
+    appraisals: Appraisals,
+    amount: Annotated[Amount, Query()],
+    term: Annotated[Term, Query()],
+) -> DtiPreviewResponse:
+    return DtiPreviewResponse.model_validate(
+        appraisals.preview_dti(user, application_id, amount, term)
+    )
+
+
+@router.post("/{application_id}/appraisal", response_model=AppraisalResponse)
+def submit_appraisal(
+    application_id: uuid.UUID, body: AppraisalRequest, user: Appraiser, appraisals: Appraisals
+) -> AppraisalResponse:
+    proposal = Proposal(body.recommendation, body.proposed_amount, body.proposed_term, body.comment)
+    return respond_appraisal(
+        appraisals.submit(user, application_id, proposal, body.fraud_suspected)
+    )
+
+
+@router.get("/{application_id}/appraisal/documents/{document_id}")
+def view_document(
+    application_id: uuid.UUID, document_id: uuid.UUID, user: Appraiser, appraisals: Appraisals
+) -> Response:
+    """Trình xem giấy tờ của M06: ảnh đã in watermark người xem; PDF kèm chuỗi watermark."""
+    shown = appraisals.document(user, application_id, document_id)
+    return Response(
+        content=shown.content,
+        media_type=shown.content_type,
+        headers={
+            "Content-Disposition": "inline",
+            "Cache-Control": "no-store",
+            "X-Watermark": quote(shown.watermark),
+            "X-Watermark-Stamped": "true" if shown.stamped else "false",
+        },
+    )

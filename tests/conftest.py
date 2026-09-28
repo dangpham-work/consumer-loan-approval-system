@@ -36,6 +36,7 @@ TABLES = [
     "notifications",
     "otp_challenges",
     "application_status_history",
+    "appraisal_reports",
     "credit_scores",
     "cic_reports",
     "user_roles",

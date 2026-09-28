@@ -13,7 +13,7 @@ from loan_system.domain.scoring import (
     RuleBasedScoringModel,
     bundled_scorecard,
     fraud_suspected,
-    scoring_dti,
+    loan_dti,
 )
 
 CONTENT = bundled_scorecard()
@@ -176,17 +176,17 @@ def test_fraud_is_suspected_when_cic_exceeds_declared_debt_by_20_percent_or_1_mi
     assert not fraud_suspected(Decimal(3) * m, None)  # thiếu CIC
 
 
-def test_scoring_dti_uses_ceiling_rate_and_the_larger_obligation() -> None:
+def test_loan_dti_uses_ceiling_rate_and_the_larger_obligation() -> None:
     # 30 triệu, 12 kỳ, lãi suất trần 28%/năm -> 2.895.180đ mỗi kỳ (ADR 0001)
-    declared_only = scoring_dti(
+    declared_only = loan_dti(
         monthly_income=Decimal(12_000_000), declared_debt=Decimal(2_000_000),
         cic_obligation=None, amount=Decimal(30_000_000), term_months=12,
-        ceiling_rate=Decimal("0.28"),
+        annual_rate=Decimal("0.28"),
     )
-    cic_higher = scoring_dti(
+    cic_higher = loan_dti(
         monthly_income=Decimal(12_000_000), declared_debt=Decimal(2_000_000),
         cic_obligation=Decimal(3_000_000), amount=Decimal(30_000_000), term_months=12,
-        ceiling_rate=Decimal("0.28"),
+        annual_rate=Decimal("0.28"),
     )
     assert declared_only == Decimal(4_895_180) / Decimal(12_000_000)
     assert cic_higher == Decimal(5_895_180) / Decimal(12_000_000)
