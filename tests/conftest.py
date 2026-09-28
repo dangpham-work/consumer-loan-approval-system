@@ -31,6 +31,9 @@ ODBC_DRIVER = os.environ.get("LOAN_TEST_ODBC_DRIVER", "ODBC Driver 17 for SQL Se
 TABLES = [
     "sessions",
     "audit_logs",
+    "notifications",
+    "otp_challenges",
+    "application_status_history",
     "user_roles",
     "application_documents",
     "loan_applications",

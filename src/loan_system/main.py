@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 
 from loan_system.adapters.email import EmailGateway, FakeEmailGateway
 from loan_system.adapters.sms import FakeSmsGateway, SmsGateway
-from loan_system.api import admin, applications, auth, customers
+from loan_system.api import admin, applications, auth, counter, customers, errors, notifications
 from loan_system.api.deps import AppContext
 from loan_system.clock import Clock, SystemClock
 from loan_system.config import Settings
@@ -44,4 +44,7 @@ def create_app(
     app.include_router(auth.router)
     app.include_router(admin.router)
     app.include_router(applications.router)
+    app.include_router(counter.router)
+    app.include_router(notifications.router)
+    errors.register(app)
     return app

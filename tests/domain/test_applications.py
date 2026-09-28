@@ -4,7 +4,9 @@ from loan_system.domain.applications import (
     DOCUMENT_TYPES,
     IN_PROGRESS,
     REQUIRED_FIELDS,
+    INFO_ITEMS,
     ApplicationStatus,
+    outside_request,
     application_code,
     mask,
     missing_for_submission,
@@ -40,3 +42,12 @@ def test_mask_follows_the_sr07_pattern() -> None:
     assert mask("0791234123") == "079****123"
     assert mask("079095001234") == "079******234"
     assert mask("123456") == "******"
+
+
+def test_a_supplement_may_only_touch_the_requested_items() -> None:
+    assert outside_request({"monthly_income", "ID_FRONT"}, {"monthly_income", "ID_FRONT"}) == set()
+    assert outside_request({"receiving_account"}, {"ID_FRONT"}) == {"receiving_account"}
+
+
+def test_loan_terms_can_never_be_requested_as_a_supplement() -> None:
+    assert not {"requested_amount", "term_months", "purpose"} & set(INFO_ITEMS)

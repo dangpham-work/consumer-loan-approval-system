@@ -74,3 +74,16 @@ Kết quả phiên hỏi đáp rà soát đề cương `De_cuong_OOAD_Vay_tin_du
 - [ ] **Số tiền trả hằng tháng ước tính (M03 bước 1)**: tính theo lãi suất trần 28%/năm (hạng C), vì lúc lập hồ sơ vay chưa có Hạng.
 - [ ] **Nộp hồ sơ vay**: bắt buộc đủ thông tin bước 2 (trừ nơi làm việc) và cả 4 loại giấy tờ (CCCD 2 mặt, chứng minh thu nhập, hóa đơn điện/nước). CCCD không đổi được nữa khi khách hàng đã từng nộp một hồ sơ vay.
 - [ ] **Màn hình Jinja2** (M01, M03, M09) chưa làm trong ticket #3, #4: mới có API.
+
+## Phát sinh khi cài đặt (ticket #5)
+
+- [ ] **`loan_applications`**: thêm `created_by`, `received_by` (FK → employees), `need_info_message`, `need_info_items`, `need_info_deadline` (UC15, BR11), `cancel_reason` (UC17).
+- [ ] **`application_documents`**: thêm `review_verdict` (PASS/FAIL), `review_note`, `reviewed_by`, `reviewed_at` (UC14 bước 4). Chỉ xác nhận hợp lệ khi đủ 4 loại giấy tờ và mọi giấy tờ đang dùng đều Đạt.
+- [ ] **Bảng mới `application_status_history`**: dòng thời gian trạng thái cho UC16 bước 3; mọi chuyển trạng thái đi qua bảng chuyển trạng thái 3.4a (UT06).
+- [ ] **Bảng `notifications`** dùng từ ticket này: thông báo trong ứng dụng (`GET /notifications`), khách hàng nhận thêm SMS. Hồ sơ vay mới nộp báo cho mọi NV tín dụng; hồ sơ vay gửi lại sau bổ sung báo cho đúng Người tiếp nhận.
+- [ ] **Bảng mới `otp_challenges`**: OTP qua SMS để khách hàng xác nhận thao tác do NV khởi tạo (lưu thông tin khách vãng lai, nộp hộ hồ sơ vay). Hết hạn 5 phút, sai 3 lần thì hủy, chỉ NV đã khởi tạo mới xác nhận được. Dữ liệu chờ xác nhận được mã hóa và xóa khi thử thách kết thúc. SMS nộp hộ nêu số tiền, kỳ hạn, tài khoản nhận (đã che); đổi các điều khoản đó sau khi gửi mã thì mã mất hiệu lực.
+- [ ] **UC15**: khi bổ sung, chỉ sửa được đúng những mục NV đã yêu cầu (trường thông tin hoặc loại giấy tờ); số tiền, kỳ hạn, mục đích không nằm trong danh sách được yêu cầu. Quá hạn 15 ngày thì không sửa, không gửi lại được. Gửi lại thì mọi giấy tờ phải được đánh giá lại.
+- [ ] **Che dữ liệu cho nhân viên**: nhân viên không thấy thu nhập (ô "M"); khách hàng không thấy mã nhân viên xử lý hồ sơ vay của mình.
+- [ ] **UC14 2a**: Người tiếp nhận giữ hồ sơ vay cả khi hồ sơ quay lại sau bổ sung. Người tạo (nộp hộ) không được nhận hồ sơ vay mình tạo (403, ghi `SOD_VIOLATION`).
+- [ ] **UC12 1a**: khách vãng lai được tạo kèm tài khoản PENDING (tên đăng nhập là số điện thoại, mật khẩu ngẫu nhiên không ai biết); việc khách vãng lai tự kích hoạt tài khoản để đăng nhập chưa làm.
+- [ ] **Phạm vi xem của nhân viên**: nhân viên có APPLICATION_VIEW thấy mọi hồ sơ vay đã nộp (dữ liệu nhạy cảm đã che) và bản nháp do chính mình nộp hộ; không thấy bản nháp của khách hàng.

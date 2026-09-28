@@ -218,8 +218,68 @@ class LoanApplication(Base):
     version: Mapped[int] = mapped_column(Integer)  # khóa lạc quan
     created_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
     submitted_at: Mapped[datetime | None] = mapped_column(DATETIMEOFFSET)
+    # Người tạo: NV tín dụng nộp hộ tại quầy (UC12 1a); Người tiếp nhận: NV đã nhận kiểm tra (UC14).
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("employees.id"))
+    received_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("employees.id"))
+    need_info_message: Mapped[str | None] = mapped_column(NVARCHAR(500))  # UC15
+    need_info_items: Mapped[str | None] = mapped_column(String(300))  # mã cố định, phân cách dấu phẩy
+    need_info_deadline: Mapped[datetime | None] = mapped_column(DATETIMEOFFSET)  # BR11
+    cancel_reason: Mapped[str | None] = mapped_column(NVARCHAR(200))
 
     __mapper_args__ = {"version_id_col": version}
+
+
+class ApplicationStatusHistory(Base):
+    """Dòng thời gian trạng thái của Hồ sơ vay (UC16 bước 3)."""
+
+    __tablename__ = "application_status_history"
+    __table_args__ = (
+        Index("ix_application_status_history_application", "application_id", "changed_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(start=1, increment=1), primary_key=True)
+    application_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("loan_applications.id"))
+    status: Mapped[str] = mapped_column(String(20))
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    reason: Mapped[str | None] = mapped_column(NVARCHAR(500))
+    changed_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
+
+
+class Notification(Base):
+    """Thông báo tới người dùng; nội dung không chứa dữ liệu nhạy cảm (SR07)."""
+
+    __tablename__ = "notifications"
+    __table_args__ = (
+        CheckConstraint("channel IN ('IN_APP','SMS','EMAIL')", name="ck_notifications_channel"),
+        Index("ix_notifications_recipient", "recipient_user_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
+    recipient_user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    type: Mapped[str] = mapped_column(String(30))
+    content: Mapped[str] = mapped_column(NVARCHAR(500))
+    channel: Mapped[str] = mapped_column(String(10))
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
+
+
+class OtpChallenge(Base):
+    """Mã OTP gửi qua SMS để một người xác nhận thao tác do người khác khởi tạo (UC12 1a)."""
+
+    __tablename__ = "otp_challenges"
+
+    id: Mapped[uuid.UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
+    purpose: Mapped[str] = mapped_column(String(30))
+    phone: Mapped[str] = mapped_column(String(15))
+    subject_id: Mapped[str | None] = mapped_column(String(50))
+    # Dữ liệu chờ xác nhận, mã hóa AES-GCM (SR06); xóa khi thử thách kết thúc.
+    payload_enc: Mapped[bytes | None] = mapped_column(LargeBinary(None))
+    otp_hash: Mapped[str] = mapped_column(Hash64())
+    expires_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
+    failed_attempts: Mapped[int] = mapped_column(SmallInteger, default=0)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
+    consumed_at: Mapped[datetime | None] = mapped_column(DATETIMEOFFSET)
 
 
 class ApplicationDocument(Base):
@@ -228,6 +288,9 @@ class ApplicationDocument(Base):
         CheckConstraint(
             "doc_type IN ('ID_FRONT','ID_BACK','INCOME_PROOF','UTILITY_BILL')",
             name="ck_application_documents_type",
+        ),
+        CheckConstraint(
+            "review_verdict IN ('PASS','FAIL')", name="ck_application_documents_verdict"
         ),
         Index("ix_application_documents_application", "application_id"),
     )
@@ -243,6 +306,11 @@ class ApplicationDocument(Base):
     uploaded_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
     # UC13 2a: file cũ cùng loại được đánh dấu thay thế, không xóa.
     replaced_at: Mapped[datetime | None] = mapped_column(DATETIMEOFFSET)
+    # UC14 bước 4: NV tiếp nhận đánh dấu từng giấy tờ Đạt/Không đạt.
+    review_verdict: Mapped[str | None] = mapped_column(String(4))
+    review_note: Mapped[str | None] = mapped_column(NVARCHAR(200))
+    reviewed_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("employees.id"))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DATETIMEOFFSET)
 
 
 class AuditLog(Base):
