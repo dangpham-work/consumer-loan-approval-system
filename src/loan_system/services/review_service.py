@@ -10,6 +10,7 @@ from datetime import timedelta
 
 from sqlalchemy.orm import Session
 
+from loan_system.adapters.cic import CicGateway
 from loan_system.adapters.sms import SmsGateway
 from loan_system.clock import Clock
 from loan_system.config import Settings
@@ -24,6 +25,7 @@ from loan_system.services.application_service import ApplicationService, Applica
 from loan_system.services.audit_service import AuditService
 from loan_system.services.auth_service import CurrentUser
 from loan_system.services.notification_service import NotificationService
+from loan_system.services.scoring_service import ScoringService
 
 
 class NotReviewable(Exception):
@@ -58,12 +60,19 @@ class InfoRequest:
 
 class ReviewService:
     def __init__(
-        self, db: Session, clock: Clock, settings: Settings, sms: SmsGateway, ip: str | None
+        self,
+        db: Session,
+        clock: Clock,
+        settings: Settings,
+        sms: SmsGateway,
+        cic: CicGateway,
+        ip: str | None,
     ) -> None:
         self._db = db
         self._clock = clock
         self._applications = ApplicationService(db, clock, settings, sms, ip)
         self._notifications = NotificationService(db, clock, sms)
+        self._scoring = ScoringService(db, clock, settings, sms, cic, ip)
         self._audit = AuditService(db, clock)
         self._ip = ip
 
@@ -117,6 +126,17 @@ class ReviewService:
         self._applications.transition(application, ApplicationStatus.VERIFIED, user.user_id)
         self._applications.log("APPLICATION_VERIFY", user, application.id)
         self._applications.commit()
+        # Hồ sơ vay "Hợp lệ" kích hoạt chấm điểm (AD02 A14, UC18), trong giao dịch riêng.
+        try:
+            self._scoring.score(application.id)
+        except Exception:
+            # Việc xác nhận đã lưu; hồ sơ vay ở lại "Hợp lệ" để được chấm lại (UC18 4a).
+            self._db.rollback()
+            self._audit.log(
+                "SCORING_FAILED", target_type="LOAN_APPLICATION", target_id=application.id,
+                level="CRITICAL",
+            )
+            self._db.commit()
         return self._applications.view(application, user)
 
     def request_info(

@@ -41,6 +41,10 @@ class Settings(BaseSettings):
 
     # Giấy tờ lưu ngoài thư mục web (UC13 bước 4).
     document_storage_dir: Path = Path("var/documents")
+    # Thư mục chứa file mô hình chấm điểm; checksum từng file đăng ký trong bảng scoring_models.
+    scoring_model_dir: Path = Path(__file__).parent / "scoring_models"
+    cic_timeouts_seconds: tuple[float, ...] = (5, 10, 20)  # UC19 2a: 3 lần, chờ tăng dần
+    cic_reuse_days: int = 30  # UC19 1a
 
     def sqlalchemy_url(self) -> URL:
         if self.database_url:

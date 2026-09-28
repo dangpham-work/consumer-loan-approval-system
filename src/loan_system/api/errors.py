@@ -25,6 +25,7 @@ from loan_system.services.application_service import (
 )
 from loan_system.services.counter_service import DuplicateCustomer
 from loan_system.services.otp_challenge_service import ChallengeFailed
+from loan_system.services.scoring_service import ScoreNotFound
 from loan_system.services.review_service import (
     AlreadyReceived,
     DocumentNotFound,
@@ -38,6 +39,7 @@ FIXED: dict[type[Exception], tuple[int, str]] = {
     ApplicationNotFound: (status.HTTP_404_NOT_FOUND, "Không tìm thấy hồ sơ vay"),
     DocumentNotFound: (status.HTTP_404_NOT_FOUND, "Không tìm thấy giấy tờ"),
     CustomerNotFound: (status.HTTP_404_NOT_FOUND, "Không tìm thấy khách hàng"),
+    ScoreNotFound: (status.HTTP_404_NOT_FOUND, "Hồ sơ vay chưa được chấm điểm"),
     ApplicationInProgress: (
         status.HTTP_409_CONFLICT,
         "Khách hàng đang có một hồ sơ vay hoặc khoản vay chưa kết thúc",

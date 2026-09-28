@@ -1,4 +1,4 @@
-"""Hồ sơ vay: UC12–UC17 (màn hình M02, M03, M05).
+"""Hồ sơ vay: UC12–UC17 (màn hình M02, M03, M05), UC20 Giải thích kết quả chấm điểm.
 
 Lỗi nghiệp vụ được đổi sang mã HTTP ở `api/errors.py`.
 """
@@ -35,6 +35,7 @@ from loan_system.services.application_service import (
 from loan_system.services.auth_service import CurrentUser
 from loan_system.services.counter_service import CounterService
 from loan_system.services.review_service import InfoRequest, ReviewService
+from loan_system.services.scoring_service import ScoringService
 
 router = APIRouter(prefix="/applications", tags=["Hồ sơ vay"])
 
@@ -71,6 +72,7 @@ Editor = Annotated[CurrentUser, Depends(require("APPLICATION_CREATE"))]
 Viewer = Annotated[CurrentUser, Depends(require("APPLICATION_VIEW"))]
 Verifier = Annotated[CurrentUser, Depends(require("APPLICATION_VERIFY"))]
 InfoRequester = Annotated[CurrentUser, Depends(require("APPLICATION_REQUEST_INFO"))]
+ScoreViewer = Annotated[CurrentUser, Depends(require("CREDIT_SCORE_VIEW"))]
 
 
 def _applications(db: Db, ctx: Ctx, ip: ClientIp) -> ApplicationService:
@@ -78,16 +80,21 @@ def _applications(db: Db, ctx: Ctx, ip: ClientIp) -> ApplicationService:
 
 
 def _reviews(db: Db, ctx: Ctx, ip: ClientIp) -> ReviewService:
-    return ReviewService(db, ctx.clock, ctx.settings, ctx.sms, ip)
+    return ReviewService(db, ctx.clock, ctx.settings, ctx.sms, ctx.cic, ip)
 
 
 def _counter(db: Db, ctx: Ctx, ip: ClientIp) -> CounterService:
     return CounterService(db, ctx.clock, ctx.settings, ctx.sms, ip)
 
 
+def _scoring(db: Db, ctx: Ctx, ip: ClientIp) -> ScoringService:
+    return ScoringService(db, ctx.clock, ctx.settings, ctx.sms, ctx.cic, ip)
+
+
 Applications = Annotated[ApplicationService, Depends(_applications)]
 Reviews = Annotated[ReviewService, Depends(_reviews)]
 Counter = Annotated[CounterService, Depends(_counter)]
+Scoring = Annotated[ScoringService, Depends(_scoring)]
 
 
 # Mọi schema đầu vào chỉ nhận trường khai báo; trường thừa như status, customer_id, code bị bỏ
@@ -231,6 +238,42 @@ class ApplicationSummaryResponse(BaseModel):
     term_months: int
     created_at: datetime
     submitted_at: datetime | None
+
+
+class FactorResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    code: str
+    label: str
+    points: int
+    max_points: int
+
+
+class CicResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    highest_debt_group: int
+    total_outstanding: Decimal
+    lender_count: int
+    monthly_obligation: Decimal
+    queried_at: datetime
+
+
+class ScoreResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    score: int | None
+    grade: str | None
+    knock_out_reason: str | None
+    dti: Decimal
+    factors: list[FactorResponse]
+    top_factors: list[str]
+    model_version: str | None
+    scored_at: datetime
+    annual_rate: Decimal | None
+    cic_missing: bool
+    fraud_suspected: bool
+    cic: CicResponse | None
 
 
 def respond(view: ApplicationView) -> ApplicationResponse:
@@ -380,3 +423,11 @@ def request_info(
     application_id: uuid.UUID, body: InfoRequestBody, user: InfoRequester, reviews: Reviews
 ) -> ApplicationResponse:
     return respond(reviews.request_info(user, application_id, InfoRequest(body.message, body.items)))
+
+
+# --- UC20: giải thích kết quả chấm điểm -------------------------------------------------------
+
+
+@router.get("/{application_id}/score", response_model=ScoreResponse)
+def get_score(application_id: uuid.UUID, user: ScoreViewer, scoring: Scoring) -> ScoreResponse:
+    return ScoreResponse.model_validate(scoring.explain(user, application_id))

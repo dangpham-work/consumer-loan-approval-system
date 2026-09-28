@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session, sessionmaker
 
+from loan_system.adapters.cic import CicGateway
 from loan_system.adapters.email import EmailGateway
 from loan_system.adapters.sms import SmsGateway
 from loan_system.clock import Clock
@@ -19,6 +20,7 @@ class AppContext:
     clock: Clock
     sms: SmsGateway
     email: EmailGateway
+    cic: CicGateway
     session_factory: sessionmaker[Session]
     limits: RateLimits
 

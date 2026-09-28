@@ -54,9 +54,12 @@ def test_credit_officer_receives_checks_and_verifies_a_submitted_application(
 
     assert verify_as(officer, app_id).status_code == 200
 
+    # Xác nhận hợp lệ kích hoạt chấm điểm ngay (UC18); CIC giả lập mặc định cho hạng A.
     detail = customer.get(f"/applications/{app_id}").json()
-    assert detail["status"] == "VERIFIED"
-    assert [h["status"] for h in detail["history"]] == ["DRAFT", "SUBMITTED", "VERIFIED"]
+    assert detail["status"] == "APPRAISING"
+    assert [h["status"] for h in detail["history"]] == [
+        "DRAFT", "SUBMITTED", "VERIFIED", "APPRAISING"
+    ]
 
 
 def test_staff_see_masked_data_and_never_see_customer_drafts(

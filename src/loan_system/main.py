@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from loan_system.adapters.cic import CicGateway, FakeCicGateway
 from loan_system.adapters.email import EmailGateway, FakeEmailGateway
 from loan_system.adapters.sms import FakeSmsGateway, SmsGateway
 from loan_system.api import admin, applications, auth, counter, customers, errors, notifications
@@ -17,6 +18,7 @@ def create_app(
     clock: Clock | None = None,
     sms: SmsGateway | None = None,
     email: EmailGateway | None = None,
+    cic: CicGateway | None = None,
 ) -> FastAPI:
     settings = settings or Settings()
     clock = clock or SystemClock()
@@ -27,6 +29,7 @@ def create_app(
         # CIC, SMS, email, cổng thanh toán đều là giả lập
         sms=sms or FakeSmsGateway(),
         email=email or FakeEmailGateway(),
+        cic=cic or FakeCicGateway(),
         session_factory=make_session_factory(make_engine(settings.sqlalchemy_url())),
         limits=RateLimits.from_settings(settings, clock),
     )

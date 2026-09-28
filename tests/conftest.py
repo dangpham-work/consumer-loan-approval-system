@@ -6,6 +6,7 @@ và xóa database khi kết thúc. Mỗi test bắt đầu với dữ liệu tr�
 """
 
 import os
+import shutil
 import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -19,6 +20,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.engine import URL
 
+from loan_system.adapters.cic import FakeCicGateway
 from loan_system.adapters.email import FakeEmailGateway
 from loan_system.adapters.sms import FakeSmsGateway
 from loan_system.config import Settings
@@ -34,6 +36,8 @@ TABLES = [
     "notifications",
     "otp_challenges",
     "application_status_history",
+    "credit_scores",
+    "cic_reports",
     "user_roles",
     "application_documents",
     "loan_applications",
@@ -114,12 +118,27 @@ def email() -> FakeEmailGateway:
 
 
 @pytest.fixture
+def cic() -> FakeCicGateway:
+    return FakeCicGateway()
+
+
+@pytest.fixture
+def scoring_model_dir(tmp_path: Path) -> Path:
+    """Bản sao thư mục mô hình chấm điểm cho từng test, để ST09 thay được file mô hình."""
+    target = tmp_path / "scoring_models"
+    shutil.copytree(Settings.model_fields["scoring_model_dir"].default, target)
+    return target
+
+
+@pytest.fixture
 def client(
     database_url: URL,
     engine: Engine,
     clock: FakeClock,
     sms: FakeSmsGateway,
     email: FakeEmailGateway,
+    cic: FakeCicGateway,
+    scoring_model_dir: Path,
     tmp_path: Path,
 ) -> Iterator[TestClient]:
     with engine.begin() as conn:
@@ -128,8 +147,9 @@ def client(
     settings = Settings(
         database_url=database_url.render_as_string(hide_password=False),
         document_storage_dir=tmp_path / "documents",
+        scoring_model_dir=scoring_model_dir,
     )
-    app = create_app(settings, clock=clock, sms=sms, email=email)
+    app = create_app(settings, clock=clock, sms=sms, email=email, cic=cic)
     # https để cookie Secure (SR11) được gửi lại như trên trình duyệt thật.
     with TestClient(app, base_url="https://testserver") as test_client:
         yield test_client

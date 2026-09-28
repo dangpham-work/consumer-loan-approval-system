@@ -5,8 +5,9 @@ from enum import StrEnum
 CUSTOMER = "CUSTOMER"
 ADMIN = "ADMIN"
 CREDIT_OFFICER = "CREDIT_OFFICER"
+APPRAISER = "APPRAISER"
 # Vai trò tham gia nghiệp vụ cho vay; Quản trị viên không được giữ vai trò nào trong số này.
-LENDING_ROLES = frozenset({CREDIT_OFFICER, "APPRAISER", "APPROVER", "DISBURSER"})
+LENDING_ROLES = frozenset({CREDIT_OFFICER, APPRAISER, "APPROVER", "DISBURSER"})
 
 MIN_PASSWORD_LENGTH = 10  # SR01
 

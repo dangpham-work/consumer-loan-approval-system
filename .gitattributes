@@ -1,0 +1,2 @@
+# File mô hình chấm điểm được kiểm tra SHA-256 từng byte (SR13): không đổi ký tự xuống dòng.
+src/loan_system/scoring_models/*.json -text

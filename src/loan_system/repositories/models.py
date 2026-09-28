@@ -40,6 +40,10 @@ def Encrypted() -> LargeBinary:  # noqa: N802 - bản mã AES-GCM (SR06)
     return LargeBinary(500)
 
 
+def Rate() -> DECIMAL[Decimal]:  # noqa: N802 - lãi suất năm dạng thập phân (0.2400)
+    return DECIMAL(5, 4)
+
+
 class Base(DeclarativeBase):
     pass
 
@@ -225,6 +229,11 @@ class LoanApplication(Base):
     need_info_items: Mapped[str | None] = mapped_column(String(300))  # mã cố định, phân cách dấu phẩy
     need_info_deadline: Mapped[datetime | None] = mapped_column(DATETIMEOFFSET)  # BR11
     cancel_reason: Mapped[str | None] = mapped_column(NVARCHAR(200))
+    # Chốt khi chấm điểm (UC18): lãi suất theo hạng lấy từ đúng phiên bản chính sách này.
+    annual_rate: Mapped[Decimal | None] = mapped_column(Rate())
+    policy_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("approval_policies.id"))
+    cic_missing: Mapped[bool] = mapped_column(Boolean, default=False)  # Thiếu dữ liệu CIC
+    fraud_suspected: Mapped[bool] = mapped_column(Boolean, default=False)  # ADR 0002
 
     __mapper_args__ = {"version_id_col": version}
 
@@ -334,3 +343,88 @@ class AuditLog(Base):
     detail: Mapped[str | None] = mapped_column(NVARCHAR(500))
     prev_hash: Mapped[str] = mapped_column(Hash64())
     hash: Mapped[str] = mapped_column(Hash64())
+
+
+class ScoringModelVersion(Base):
+    """Phiên bản mô hình chấm điểm đã đăng ký, kèm checksum file (SR13, UC21)."""
+
+    __tablename__ = "scoring_models"
+
+    id: Mapped[uuid.UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
+    version: Mapped[str] = mapped_column(String(20), unique=True)
+    file_name: Mapped[str] = mapped_column(String(100))
+    checksum: Mapped[str] = mapped_column(Hash64())
+    is_active: Mapped[bool] = mapped_column(Boolean)
+    created_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
+
+
+class ApprovalPolicy(Base):
+    """Chính sách phê duyệt có phiên bản; bản cũ không bị ghi đè."""
+
+    __tablename__ = "approval_policies"
+
+    id: Mapped[uuid.UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
+    version: Mapped[int] = mapped_column(Integer, unique=True)
+    rate_grade_a: Mapped[Decimal] = mapped_column(Rate())
+    rate_grade_b: Mapped[Decimal] = mapped_column(Rate())
+    rate_grade_c: Mapped[Decimal] = mapped_column(Rate())
+    prepayment_fee_rate: Mapped[Decimal] = mapped_column(Rate())
+    is_active: Mapped[bool] = mapped_column(Boolean)
+    created_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
+
+    def rate_for(self, grade: str) -> Decimal:
+        """Lãi suất theo hạng (ADR 0001); hạng D bị từ chối nên không có lãi suất."""
+        return {"A": self.rate_grade_a, "B": self.rate_grade_b, "C": self.rate_grade_c}[grade]
+
+    @property
+    def ceiling_rate(self) -> Decimal:
+        """Lãi suất trần: lãi suất của hạng rủi ro nhất chưa bị từ chối (hạng C)."""
+        return self.rate_grade_c
+
+
+class CicReportRecord(Base):
+    """Báo cáo CIC gắn với Hồ sơ vay (UC19); không chứa số CCCD."""
+
+    __tablename__ = "cic_reports"
+    __table_args__ = (
+        CheckConstraint("highest_debt_group BETWEEN 0 AND 5", name="ck_cic_reports_debt_group"),
+        Index("ix_cic_reports_application", "application_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
+    application_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("loan_applications.id"))
+    highest_debt_group: Mapped[int] = mapped_column(SmallInteger)
+    total_outstanding: Mapped[Decimal] = mapped_column(Money())
+    lender_count: Mapped[int] = mapped_column(SmallInteger)
+    monthly_obligation: Mapped[Decimal] = mapped_column(Money())
+    utility_late_payments: Mapped[int | None] = mapped_column(SmallInteger)
+    # Thời điểm CIC trả kết quả; báo cáo dùng lại (UC19 1a) giữ thời điểm của lần tra cứu gốc.
+    queried_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
+
+
+class CreditScoreRecord(Base):
+    """Kết quả chấm điểm (UC18); một Hồ sơ vay có thể được chấm lại, bản mới nhất có hiệu lực."""
+
+    __tablename__ = "credit_scores"
+    __table_args__ = (
+        CheckConstraint("score BETWEEN 0 AND 1000", name="ck_credit_scores_score"),
+        CheckConstraint("grade IN ('A','B','C','D')", name="ck_credit_scores_grade"),
+        CheckConstraint("ISJSON(factors_json) = 1", name="ck_credit_scores_factors_json"),
+        CheckConstraint(
+            "knock_out_reason IS NOT NULL"
+            " OR (score IS NOT NULL AND grade IS NOT NULL AND model_version IS NOT NULL)",
+            name="ck_credit_scores_result",
+        ),
+        Index("ix_credit_scores_application", "application_id", "scored_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
+    application_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("loan_applications.id"))
+    score: Mapped[int | None] = mapped_column(SmallInteger)
+    grade: Mapped[str | None] = mapped_column(CHAR(1))
+    knock_out_reason: Mapped[str | None] = mapped_column(NVARCHAR(100))
+    dti: Mapped[Decimal] = mapped_column(DECIMAL(9, 4))  # theo lãi suất trần (ADR 0001)
+    # Điểm từng yếu tố so với điểm tối đa (FR04.4); rỗng khi bị loại trừ.
+    factors_json: Mapped[str] = mapped_column(NVARCHAR(None))
+    model_version: Mapped[str | None] = mapped_column(String(20))  # SR13
+    scored_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)

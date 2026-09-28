@@ -643,6 +643,14 @@ class ApplicationService:
         material = f"{application.requested_amount}|{application.term_months}|{application.purpose}|{account}"
         return hashlib.sha256(material.encode()).hexdigest()
 
+    def national_id_of(self, customer: Customer) -> str:
+        """Số CCCD dạng rõ, chỉ dùng trong bộ nhớ (UC19 bước 1)."""
+        return self._decrypt(customer.national_id_enc, _national_id_context(customer.id)) or ""
+
+    def monthly_income_of(self, customer: Customer) -> Decimal:
+        income = self._decrypt(customer.monthly_income_enc, _income_context(customer.id))
+        return Decimal(income or 0)
+
     def receiving_account_masked(self, application: LoanApplication) -> str:
         account = self._decrypt(application.receiving_account_enc, _account_context(application.id))
         return mask(account) if account else ""
