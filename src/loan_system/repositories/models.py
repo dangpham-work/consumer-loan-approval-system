@@ -2,8 +2,24 @@
 
 import uuid
 from datetime import date, datetime
+from decimal import Decimal
 
-from sqlalchemy import CHAR, BigInteger, CheckConstraint, Date, ForeignKey, Identity, SmallInteger, String
+from sqlalchemy import (
+    CHAR,
+    DECIMAL,
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    Date,
+    ForeignKey,
+    Identity,
+    Index,
+    Integer,
+    LargeBinary,
+    SmallInteger,
+    String,
+    text,
+)
 from sqlalchemy.dialects.mssql import DATETIMEOFFSET, NVARCHAR, UNIQUEIDENTIFIER
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -15,12 +31,32 @@ def Hash64() -> CHAR:  # noqa: N802 - dùng như một kiểu cột
     return CHAR(64, collation=HASH_COLLATION)
 
 
+def Money() -> DECIMAL[Decimal]:  # noqa: N802 - tiền tính bằng đồng (4.1.2a)
+    return DECIMAL(15, 0)
+
+
+def Encrypted() -> LargeBinary:  # noqa: N802 - bản mã AES-GCM (SR06)
+    # 1 byte phiên bản khóa + 12 byte nonce + dữ liệu + 16 byte tag.
+    return LargeBinary(500)
+
+
 class Base(DeclarativeBase):
     pass
 
 
 class Customer(Base):
     __tablename__ = "customers"
+    __table_args__ = (
+        CheckConstraint(
+            "housing_type IN ('OWN','FAMILY','RENT')", name="ck_customers_housing_type"
+        ),
+        Index(
+            "ux_customers_national_id_hash",
+            "national_id_hash",
+            unique=True,
+            mssql_where=text("national_id_hash IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
     full_name: Mapped[str] = mapped_column(NVARCHAR(100))
@@ -30,6 +66,55 @@ class Customer(Base):
     consent_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
     consent_version: Mapped[str] = mapped_column(String(10))
     created_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
+    # Thu thập khi khách hàng lập Hồ sơ vay đầu tiên, không có lúc đăng ký (UC09).
+    national_id_enc: Mapped[bytes | None] = mapped_column(Encrypted())
+    national_id_hash: Mapped[str | None] = mapped_column(Hash64())  # blind index
+    occupation: Mapped[str | None] = mapped_column(NVARCHAR(50))
+    employer: Mapped[str | None] = mapped_column(NVARCHAR(100))
+    employment_years: Mapped[int | None] = mapped_column(SmallInteger)
+    monthly_income_enc: Mapped[bytes | None] = mapped_column(Encrypted())
+    housing_type: Mapped[str | None] = mapped_column(String(10))
+    address: Mapped[str | None] = mapped_column(NVARCHAR(255))
+
+
+class Employee(Base):
+    __tablename__ = "employees"
+
+    id: Mapped[uuid.UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
+    full_name: Mapped[str] = mapped_column(NVARCHAR(100))
+    email: Mapped[str] = mapped_column(NVARCHAR(100), unique=True)
+    branch: Mapped[str] = mapped_column(NVARCHAR(50))
+    created_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
+
+
+class Role(Base):
+    __tablename__ = "roles"
+
+    id: Mapped[uuid.UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
+    code: Mapped[str] = mapped_column(String(30), unique=True)
+    name: Mapped[str] = mapped_column(NVARCHAR(100))
+
+
+class Permission(Base):
+    __tablename__ = "permissions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
+    code: Mapped[str] = mapped_column(String(50), unique=True)
+    description: Mapped[str] = mapped_column(NVARCHAR(200))
+
+
+class UserRole(Base):
+    __tablename__ = "user_roles"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    role_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("roles.id"), primary_key=True)
+
+
+class RolePermission(Base):
+    __tablename__ = "role_permissions"
+
+    role_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("roles.id"), primary_key=True)
+    permission_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("permissions.id"), primary_key=True)
 
 
 class User(Base):
@@ -37,6 +122,11 @@ class User(Base):
     __table_args__ = (
         CheckConstraint(
             "status IN ('PENDING','ACTIVE','LOCKED','DISABLED')", name="ck_users_status"
+        ),
+        CheckConstraint(
+            "(employee_id IS NULL AND customer_id IS NOT NULL)"
+            " OR (employee_id IS NOT NULL AND customer_id IS NULL)",
+            name="ck_users_owner",
         ),
     )
 
@@ -47,8 +137,14 @@ class User(Base):
     failed_attempts: Mapped[int] = mapped_column(SmallInteger, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DATETIMEOFFSET)
     customer_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("customers.id"))
+    employee_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("employees.id"))
     last_login_at: Mapped[datetime | None] = mapped_column(DATETIMEOFFSET)
     created_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
+    # Tài khoản PENDING phải đổi mật khẩu tạm rồi đăng ký TOTP trước khi dùng (UC01 3b).
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
+    totp_secret_enc: Mapped[bytes | None] = mapped_column(Encrypted())  # SR02, SR06
+    # Bước thời gian của mã TOTP dùng gần nhất, để một mã không dùng được hai lần (UC02 bước 3).
+    totp_last_step: Mapped[int | None] = mapped_column(BigInteger)
 
 
 class RegistrationRequest(Base):
@@ -80,6 +176,73 @@ class UserSession(Base):
     created_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
     last_seen_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
     revoked_at: Mapped[datetime | None] = mapped_column(DATETIMEOFFSET)
+    # SETUP: đăng nhập lần đầu; MFA: đã qua mật khẩu, chờ TOTP; FULL: phiên làm việc đầy đủ.
+    stage: Mapped[str] = mapped_column(String(10))
+    otp_failed_attempts: Mapped[int] = mapped_column(SmallInteger, default=0)
+
+
+class LoanApplication(Base):
+    __tablename__ = "loan_applications"
+    __table_args__ = (
+        CheckConstraint(
+            "requested_amount BETWEEN 5000000 AND 100000000", name="ck_loan_applications_amount"
+        ),
+        CheckConstraint("term_months BETWEEN 6 AND 36", name="ck_loan_applications_term"),
+        CheckConstraint(
+            "existing_monthly_debt >= 0", name="ck_loan_applications_existing_debt"
+        ),
+        CheckConstraint(
+            "status IN ('DRAFT','SUBMITTED','NEED_INFO','VERIFIED','APPRAISING',"
+            "'PENDING_APPROVAL','APPROVED','REJECTED','CANCELLED','DISBURSED','LOCKED')",
+            name="ck_loan_applications_status",
+        ),
+        # Mã hồ sơ vay chỉ được cấp khi nộp; bản nháp chưa có mã.
+        Index(
+            "ux_loan_applications_code", "code", unique=True, mssql_where=text("code IS NOT NULL")
+        ),
+        Index("ix_loan_applications_status_submitted", "status", "submitted_at"),
+        Index("ix_loan_applications_customer", "customer_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
+    code: Mapped[str | None] = mapped_column(String(20))
+    customer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("customers.id"))
+    requested_amount: Mapped[Decimal] = mapped_column(Money())
+    term_months: Mapped[int] = mapped_column(SmallInteger)
+    purpose: Mapped[str] = mapped_column(String(20))
+    existing_monthly_debt: Mapped[Decimal | None] = mapped_column(Money())
+    receiving_account_enc: Mapped[bytes | None] = mapped_column(Encrypted())
+    status: Mapped[str] = mapped_column(String(20))
+    consent_at: Mapped[datetime | None] = mapped_column(DATETIMEOFFSET)  # SR14
+    consent_version: Mapped[str | None] = mapped_column(String(10))
+    version: Mapped[int] = mapped_column(Integer)  # khóa lạc quan
+    created_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
+    submitted_at: Mapped[datetime | None] = mapped_column(DATETIMEOFFSET)
+
+    __mapper_args__ = {"version_id_col": version}
+
+
+class ApplicationDocument(Base):
+    __tablename__ = "application_documents"
+    __table_args__ = (
+        CheckConstraint(
+            "doc_type IN ('ID_FRONT','ID_BACK','INCOME_PROOF','UTILITY_BILL')",
+            name="ck_application_documents_type",
+        ),
+        Index("ix_application_documents_application", "application_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
+    application_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("loan_applications.id"))
+    doc_type: Mapped[str] = mapped_column(String(20))
+    storage_path: Mapped[str] = mapped_column(String(255))
+    content_type: Mapped[str] = mapped_column(String(50))
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    sha256: Mapped[str] = mapped_column(Hash64())
+    uploaded_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    uploaded_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
+    # UC13 2a: file cũ cùng loại được đánh dấu thay thế, không xóa.
+    replaced_at: Mapped[datetime | None] = mapped_column(DATETIMEOFFSET)
 
 
 class AuditLog(Base):
@@ -100,5 +263,6 @@ class AuditLog(Base):
     ip_address: Mapped[str | None] = mapped_column(String(45))
     level: Mapped[str] = mapped_column(String(10))
     created_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
+    detail: Mapped[str | None] = mapped_column(NVARCHAR(500))
     prev_hash: Mapped[str] = mapped_column(Hash64())
     hash: Mapped[str] = mapped_column(Hash64())

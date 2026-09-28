@@ -24,6 +24,7 @@ class AuditService:
         target_id: str | uuid.UUID | None = None,
         ip_address: str | None = None,
         level: str = "INFO",
+        detail: str | None = None,
     ) -> None:
         # Khóa bản ghi cuối đến hết giao dịch để hai giao dịch không cùng nối vào một prev_hash.
         last = self._db.execute(
@@ -38,6 +39,7 @@ class AuditService:
             ip_address=ip_address,
             level=level,
             created_at=self._clock.now(),
+            detail=detail,
         )
         self._db.add(
             AuditLog(
@@ -49,6 +51,7 @@ class AuditService:
                 ip_address=content.ip_address,
                 level=content.level,
                 created_at=content.created_at,
+                detail=content.detail,
                 prev_hash=prev_hash,
                 hash=compute_hash(prev_hash, seq, content),
             )

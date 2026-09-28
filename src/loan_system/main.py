@@ -2,26 +2,33 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from loan_system.adapters.email import EmailGateway, FakeEmailGateway
 from loan_system.adapters.sms import FakeSmsGateway, SmsGateway
-from loan_system.api import auth, customers
+from loan_system.api import admin, applications, auth, customers
 from loan_system.api.deps import AppContext
 from loan_system.clock import Clock, SystemClock
 from loan_system.config import Settings
 from loan_system.db import make_engine, make_session_factory
+from loan_system.security.rate_limit import RateLimits
 
 
 def create_app(
     settings: Settings | None = None,
     clock: Clock | None = None,
     sms: SmsGateway | None = None,
+    email: EmailGateway | None = None,
 ) -> FastAPI:
     settings = settings or Settings()
+    clock = clock or SystemClock()
     app = FastAPI(title="Hệ thống quản lý và xét duyệt vay tín dụng tiêu dùng")
     app.state.ctx = AppContext(
         settings=settings,
-        clock=clock or SystemClock(),
-        sms=sms or FakeSmsGateway(),  # CIC, SMS, cổng thanh toán đều là giả lập
+        clock=clock,
+        # CIC, SMS, email, cổng thanh toán đều là giả lập
+        sms=sms or FakeSmsGateway(),
+        email=email or FakeEmailGateway(),
         session_factory=make_session_factory(make_engine(settings.sqlalchemy_url())),
+        limits=RateLimits.from_settings(settings, clock),
     )
 
     @app.exception_handler(RequestValidationError)
@@ -35,4 +42,6 @@ def create_app(
 
     app.include_router(customers.router)
     app.include_router(auth.router)
+    app.include_router(admin.router)
+    app.include_router(applications.router)
     return app

@@ -11,8 +11,9 @@ from sqlalchemy.orm import Session
 from loan_system.adapters.sms import SmsGateway
 from loan_system.clock import Clock
 from loan_system.config import Settings
+from loan_system.domain.access import CUSTOMER
 from loan_system.domain.eligibility import is_age_eligible
-from loan_system.repositories.models import Customer, RegistrationRequest, User
+from loan_system.repositories.models import Customer, RegistrationRequest, Role, User, UserRole
 from loan_system.security.secrets import hash_password, keyed_hash, matches, new_otp
 from loan_system.services.audit_service import AuditService
 
@@ -129,6 +130,9 @@ class RegistrationService:
             created_at=now,
         )
         self._db.add(user)
+        self._db.flush()
+        customer_role = self._db.scalars(select(Role.id).where(Role.code == CUSTOMER)).one()
+        self._db.add(UserRole(user_id=user.id, role_id=customer_role))
         self._db.execute(delete(RegistrationRequest).where(RegistrationRequest.id == request.id))
         self._db.flush()
         self._audit.log(

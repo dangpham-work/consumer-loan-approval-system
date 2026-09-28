@@ -5,10 +5,12 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session, sessionmaker
 
+from loan_system.adapters.email import EmailGateway
 from loan_system.adapters.sms import SmsGateway
 from loan_system.clock import Clock
 from loan_system.config import Settings
 from loan_system.db import session_scope
+from loan_system.security.rate_limit import RateLimits
 
 
 @dataclass
@@ -16,7 +18,9 @@ class AppContext:
     settings: Settings
     clock: Clock
     sms: SmsGateway
+    email: EmailGateway
     session_factory: sessionmaker[Session]
+    limits: RateLimits
 
 
 def get_ctx(request: Request) -> AppContext:

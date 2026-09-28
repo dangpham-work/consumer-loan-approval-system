@@ -10,6 +10,7 @@ import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from alembic import command
@@ -18,6 +19,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.engine import URL
 
+from loan_system.adapters.email import FakeEmailGateway
 from loan_system.adapters.sms import FakeSmsGateway
 from loan_system.config import Settings
 from loan_system.main import create_app
@@ -25,7 +27,18 @@ from loan_system.main import create_app
 SERVER = os.environ.get("LOAN_TEST_SQLSERVER", r"localhost\MSSQLSERVER02")
 ODBC_DRIVER = os.environ.get("LOAN_TEST_ODBC_DRIVER", "ODBC Driver 17 for SQL Server")
 # Xóa theo thứ tự khóa ngoại.
-TABLES = ["sessions", "audit_logs", "users", "customers", "registration_requests"]
+# Không xóa roles, permissions, role_permissions: dữ liệu gốc do migration tạo sẵn theo ma trận RBAC.
+TABLES = [
+    "sessions",
+    "audit_logs",
+    "user_roles",
+    "application_documents",
+    "loan_applications",
+    "users",
+    "customers",
+    "employees",
+    "registration_requests",
+]
 
 
 def server_url(database: str) -> URL:
@@ -93,14 +106,27 @@ def sms() -> FakeSmsGateway:
 
 
 @pytest.fixture
+def email() -> FakeEmailGateway:
+    return FakeEmailGateway()
+
+
+@pytest.fixture
 def client(
-    database_url: URL, engine: Engine, clock: FakeClock, sms: FakeSmsGateway
+    database_url: URL,
+    engine: Engine,
+    clock: FakeClock,
+    sms: FakeSmsGateway,
+    email: FakeEmailGateway,
+    tmp_path: Path,
 ) -> Iterator[TestClient]:
     with engine.begin() as conn:
         for table in TABLES:
             conn.execute(text(f"DELETE FROM {table}"))
-    settings = Settings(database_url=database_url.render_as_string(hide_password=False))
-    app = create_app(settings, clock=clock, sms=sms)
+    settings = Settings(
+        database_url=database_url.render_as_string(hide_password=False),
+        document_storage_dir=tmp_path / "documents",
+    )
+    app = create_app(settings, clock=clock, sms=sms, email=email)
     # https để cookie Secure (SR11) được gửi lại như trên trình duyệt thật.
     with TestClient(app, base_url="https://testserver") as test_client:
         yield test_client

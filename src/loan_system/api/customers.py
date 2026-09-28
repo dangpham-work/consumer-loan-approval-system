@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
 
 from loan_system.api.deps import ClientIp, Ctx, Db
+from loan_system.domain.access import MIN_PASSWORD_LENGTH
 from loan_system.services.registration_service import (
     DuplicateIdentity,
     NewRegistration,
@@ -28,7 +29,7 @@ class RegisterRequest(BaseModel):
     date_of_birth: date
     phone: str = Field(pattern=r"^0\d{9}$")
     email: EmailStr
-    password: str = Field(min_length=10, max_length=128)  # SR01
+    password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=128)  # SR01
     accept_terms: Literal[True]  # phải tự tích đồng ý điều khoản sử dụng
 
 

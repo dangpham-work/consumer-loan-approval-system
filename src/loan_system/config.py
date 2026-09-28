@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import URL, make_url
 
@@ -25,8 +27,20 @@ class Settings(BaseSettings):
 
     session_idle_minutes: int = 15  # SR11
     otp_ttl_minutes: int = 5
-    otp_max_attempts: int = 3  # UC09 4a
+    otp_max_attempts: int = 3  # UC09 4a, UC02 3b
     terms_version: str = "2026.1"
+    data_processing_terms_version: str = "2026.1"  # điều khoản xử lý dữ liệu cá nhân (SR14)
+
+    login_max_failures: int = 5  # SR01, UC01 3c
+    lockout_minutes: int = 15
+    # SR12: số lượt tối đa trong một cửa sổ thời gian
+    rate_window_seconds: int = 60
+    login_rate_limit: int = 10  # mỗi địa chỉ IP
+    otp_rate_limit: int = 10  # mỗi địa chỉ IP
+    application_write_rate_limit: int = 30  # nộp hồ sơ vay, tải giấy tờ: mỗi người dùng
+
+    # Giấy tờ lưu ngoài thư mục web (UC13 bước 4).
+    document_storage_dir: Path = Path("var/documents")
 
     def sqlalchemy_url(self) -> URL:
         if self.database_url:

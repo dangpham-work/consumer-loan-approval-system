@@ -53,3 +53,24 @@ Kết quả phiên hỏi đáp rà soát đề cương `De_cuong_OOAD_Vay_tin_du
 - [ ] **`users.username` của khách hàng = số điện thoại**.
 - [ ] **`customers.national_id_enc`, `national_id_hash`**: UC09 không thu thập CCCD, nên hai cột này sẽ được thêm ở ticket #4 và cho phép NULL cho đến khi khách hàng nộp hồ sơ vay đầu tiên (đề cương đang đặt NOT NULL).
 - [ ] **Mục 5.1**: môi trường dev dùng ODBC Driver 17 (máy phát triển), container dùng ODBC Driver 18.
+
+## Phát sinh khi cài đặt (ticket #3, #4)
+
+- [ ] **Khóa tạm do đăng nhập sai (UC01 3c)**: chỉ đặt `users.locked_until` (15 phút), không đổi `status` sang LOCKED. `status = LOCKED` dành cho Quản trị viên khóa thủ công (UC04 2b), nên hết hạn khóa tạm không vô tình mở khóa một tài khoản bị Quản trị viên khóa.
+- [ ] **Bảng `sessions`**: thêm `stage` (SETUP: đăng nhập lần đầu; MFA: đã qua mật khẩu, chờ TOTP; FULL: phiên đầy đủ) và `otp_failed_attempts` (sai 3 lần thì hủy phiên, UC02 3b).
+- [ ] **Bảng `users`**: thêm `must_change_password` (tài khoản PENDING phải đổi mật khẩu tạm trước khi đăng ký TOTP) và `totp_last_step` (chống dùng lại mã TOTP). `totp_secret_enc` mã hóa AES-GCM bằng DATA_ENC_KEY.
+- [ ] **Bảng `employees`**: chỉ có họ tên, email, chi nhánh (đúng các trường UC04 bước 2); bỏ `employee_code`, `dob`, `phone`. Tên đăng nhập nhân viên do Quản trị viên đặt và phải bắt đầu bằng chữ cái, để không trùng với tên đăng nhập của khách hàng (số điện thoại).
+- [ ] **Vai trò CUSTOMER** nằm trong `user_roles` như các vai trò khác; quyền "O" của khách hàng được cấp trong `role_permissions`, còn phạm vi sở hữu kiểm tra ở tầng nghiệp vụ (SR04). Ô "M" không được cấp `CUSTOMER_VIEW_PII`.
+- [ ] **Mã quyền**: ô gộp trong ma trận RBAC tách thành từng mã: `APPLICATION_VERIFY` và `APPLICATION_REQUEST_INFO`; `LOAN_APPROVE` và `LOAN_REJECT`.
+- [ ] **UC04 2d**: Quản trị viên không được tự gán cho mình bất kỳ vai trò nào ngoài ADMIN (bị chặn với 403, ghi `ROLE_ASSIGN_DENIED`). Ngoài ra không tài khoản nào được giữ ADMIN cùng vai trò nghiệp vụ cho vay, để hai quản trị viên không gán chéo cho nhau. Tạo nhân viên và đổi vai trò đều yêu cầu nhập lại TOTP (step-up, 4.2.4).
+- [ ] **Sai mật khẩu và sai mã TOTP dùng chung bộ đếm khóa tài khoản** (SR01), bộ đếm chỉ về 0 khi đăng nhập xong hẳn: biết mật khẩu cũng không thể đoán mã TOTP qua nhiều lần đăng nhập.
+- [ ] **`audit_logs.detail`**: cột chi tiết không nhạy cảm (ví dụ vai trò trước/sau, UC04). Chỉ đưa vào nội dung băm khi có giá trị, nên hash của các bản ghi cũ không đổi.
+- [ ] **Quản trị viên đầu tiên** tạo bằng lệnh `python -m loan_system.create_admin`; mật khẩu tạm in ra một lần.
+- [ ] **Giới hạn tần suất (SR12)**: đăng nhập và xác thực OTP 10 lượt mỗi phút mỗi địa chỉ IP; nộp hồ sơ vay và tải giấy tờ 30 lượt mỗi phút mỗi người dùng. Bộ đếm trong bộ nhớ tiến trình; chạy nhiều worker thì cần bộ đếm dùng chung (Redis).
+- [ ] **Che dữ liệu (SR07)**: giữ 3 ký tự đầu và 3 ký tự cuối (079******234). Mỗi hồ sơ vay tối đa 20 file tải lên (kể cả file đã bị thay thế).
+- [ ] **`loan_applications.code`**: cho phép NULL, chỉ cấp khi nộp (UC12 bước 9), duy nhất khi có giá trị; số thứ tự lấy từ SEQUENCE `loan_application_code_seq`. Thêm `consent_at`, `consent_version` (đồng ý xử lý dữ liệu cá nhân gắn với từng hồ sơ vay, SR14) và `created_at`. Các cột `received_by`, `appraised_by`, `policy_id`, `annual_rate`, `created_by`, `deleted_at` thêm ở ticket dùng đến chúng.
+- [ ] **`application_documents`**: thêm `content_type` (kiểu thật theo magic bytes), `size_bytes`, `uploaded_by`, `replaced_at` (UC13 2a: file cũ được đánh dấu thay thế, không xóa).
+- [ ] **`customers.employer`**: thêm cột nơi làm việc (M03 bước 2 có trường này nhưng lược đồ 4.1.2d không có).
+- [ ] **Số tiền trả hằng tháng ước tính (M03 bước 1)**: tính theo lãi suất trần 28%/năm (hạng C), vì lúc lập hồ sơ vay chưa có Hạng.
+- [ ] **Nộp hồ sơ vay**: bắt buộc đủ thông tin bước 2 (trừ nơi làm việc) và cả 4 loại giấy tờ (CCCD 2 mặt, chứng minh thu nhập, hóa đơn điện/nước). CCCD không đổi được nữa khi khách hàng đã từng nộp một hồ sơ vay.
+- [ ] **Màn hình Jinja2** (M01, M03, M09) chưa làm trong ticket #3, #4: mới có API.

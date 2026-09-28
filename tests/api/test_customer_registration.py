@@ -46,7 +46,8 @@ def test_customer_registers_verifies_phone_and_logs_in(
     assert login.status_code == 200
     me = client.get("/auth/session")
     assert me.status_code == 200
-    assert me.json()["role"] == "CUSTOMER"
+    assert me.json()["kind"] == "CUSTOMER"
+    assert me.json()["roles"] == ["CUSTOMER"]
 
 
 def test_registration_requires_a_password_of_at_least_10_characters(client: TestClient) -> None:
@@ -135,4 +136,4 @@ def test_extra_fields_in_registration_are_ignored(client: TestClient, sms: FakeS
     register_and_verify(client, sms, status="DISABLED", role="ADMIN", customer_id="x")
 
     assert client.post("/auth/login", json={"username": PHONE, "password": PASSWORD}).status_code == 200
-    assert client.get("/auth/session").json()["role"] == "CUSTOMER"
+    assert client.get("/auth/session").json()["roles"] == ["CUSTOMER"]

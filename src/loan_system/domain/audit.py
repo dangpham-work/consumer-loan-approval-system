@@ -23,6 +23,8 @@ class AuditContent:
     ip_address: str | None
     level: str
     created_at: datetime
+    # Chi tiết không nhạy cảm, ví dụ giá trị trước/sau khi đổi vai trò (UC04) hoặc lý do hủy.
+    detail: str | None = None
 
 
 @dataclass(frozen=True)
@@ -34,20 +36,20 @@ class AuditRecord:
 
 
 def compute_hash(prev_hash: str, seq: int, content: AuditContent) -> str:
-    canonical = json.dumps(
-        {
-            "seq": seq,
-            "actor_id": content.actor_id,
-            "action": content.action,
-            "target_type": content.target_type,
-            "target_id": content.target_id,
-            "ip_address": content.ip_address,
-            "level": content.level,
-            "created_at": content.created_at.isoformat(),
-        },
-        sort_keys=True,
-        ensure_ascii=False,
-    )
+    fields: dict[str, object] = {
+        "seq": seq,
+        "actor_id": content.actor_id,
+        "action": content.action,
+        "target_type": content.target_type,
+        "target_id": content.target_id,
+        "ip_address": content.ip_address,
+        "level": content.level,
+        "created_at": content.created_at.isoformat(),
+    }
+    # Chỉ đưa detail vào khi có, để hash của các bản ghi không có detail không đổi.
+    if content.detail is not None:
+        fields["detail"] = content.detail
+    canonical = json.dumps(fields, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256((prev_hash + canonical).encode("utf-8")).hexdigest()
 
 
