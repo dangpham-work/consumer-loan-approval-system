@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     otp_rate_limit: int = 10  # mỗi địa chỉ IP
     application_write_rate_limit: int = 30  # nộp hồ sơ vay, tải giấy tờ: mỗi người dùng
 
+    # SR09: số lần xem PII đầy đủ (VIEW_PII) mỗi người trong một cửa sổ, vượt thì cảnh báo CRITICAL
+    # cho Kiểm soát viên thay vì chặn (nhân viên vẫn cần xem để làm việc).
+    pii_view_alert_threshold: int = 20
+    pii_view_alert_window_minutes: int = 60
+
     # Giấy tờ lưu ngoài thư mục web (UC13 bước 4).
     document_storage_dir: Path = Path("var/documents")
     # Thư mục chứa file mô hình chấm điểm; checksum từng file đăng ký trong bảng scoring_models.

@@ -8,12 +8,16 @@ from sqlalchemy.orm import Session
 from loan_system.clock import Clock
 from loan_system.domain.audit import GENESIS_HASH, AuditContent, compute_hash
 from loan_system.repositories.models import AuditLog
+from loan_system.security.rate_limit import SlidingWindowLimiter
 
 
 class AuditService:
-    def __init__(self, db: Session, clock: Clock) -> None:
+    def __init__(
+        self, db: Session, clock: Clock, pii_view_limiter: SlidingWindowLimiter | None = None
+    ) -> None:
         self._db = db
         self._clock = clock
+        self._pii_view_limiter = pii_view_limiter
 
     def log(
         self,
@@ -57,3 +61,24 @@ class AuditService:
             )
         )
         self._db.flush()
+
+    def log_pii_view(
+        self,
+        actor_id: uuid.UUID,
+        *,
+        target_type: str,
+        target_id: str | uuid.UUID,
+        ip_address: str | None = None,
+    ) -> None:
+        """Ghi VIEW_PII (nhân viên xem CCCD/thu nhập đầy đủ của Khách hàng, ma trận RBAC).
+
+        Vượt ngưỡng lượt xem trong cửa sổ (SR09) thì ghi thêm cảnh báo CRITICAL, không chặn: nhân
+        viên vẫn cần xem để làm việc, chỉ có Kiểm soát viên chú ý khi tra cứu nhật ký.
+        """
+        self.log("VIEW_PII", actor_id=actor_id, target_type=target_type, target_id=target_id,
+                 ip_address=ip_address)
+        if self._pii_view_limiter is not None and not self._pii_view_limiter.hit(str(actor_id)):
+            self.log(
+                "PII_VIEW_THRESHOLD_EXCEEDED", actor_id=actor_id, target_type=target_type,
+                target_id=target_id, ip_address=ip_address, level="CRITICAL",
+            )

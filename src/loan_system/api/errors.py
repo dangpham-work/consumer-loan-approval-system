@@ -23,7 +23,9 @@ from loan_system.services.application_service import (
     NotRequested,
     TooManyDocuments,
 )
+from loan_system.services.audit_query_service import ExportTooLarge
 from loan_system.services.counter_service import DuplicateCustomer
+from loan_system.services.customer_service import ContactTaken, IncomeLocked
 from loan_system.services.otp_challenge_service import ChallengeFailed
 from loan_system.services.scoring_service import ScoreNotFound
 from loan_system.services.review_service import (
@@ -72,6 +74,17 @@ FIXED: dict[type[Exception], tuple[int, str]] = {
     NotTheReceiver: (status.HTTP_403_FORBIDDEN, "Chỉ người tiếp nhận mới thực hiện được"),
     SodViolation: (
         status.HTTP_403_FORBIDDEN, "Thao tác vi phạm nguyên tắc phân tách nhiệm vụ"
+    ),
+    ExportTooLarge: (
+        status.HTTP_409_CONFLICT,
+        "Kết quả lọc có quá nhiều dòng để xuất CSV. Vui lòng thu hẹp bộ lọc.",
+    ),
+    IncomeLocked: (
+        status.HTTP_409_CONFLICT,
+        "Không thể đổi thu nhập khi đang có hồ sơ vay hoặc khoản vay chưa kết thúc",
+    ),
+    ContactTaken: (
+        status.HTTP_409_CONFLICT, "Số điện thoại hoặc email này đã thuộc về một khách hàng khác"
     ),
 }
 # Thông điệp do tầng nghiệp vụ soạn, an toàn để hiển thị.

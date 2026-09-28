@@ -45,6 +45,7 @@ from loan_system.repositories.models import (
 from loan_system.security.crypto import FieldCipher, blind_index
 from loan_system.services.audit_service import AuditService
 from loan_system.services.auth_service import CurrentUser
+from loan_system.services.customer_pii import income_context, national_id_context
 from loan_system.services.notification_service import NotificationService
 
 _EXTENSIONS = {"image/jpeg": ".jpg", "image/png": ".png", "application/pdf": ".pdf"}
@@ -194,14 +195,6 @@ class ApplicationSummary:
     submitted_at: datetime | None
 
 
-def _national_id_context(customer_id: uuid.UUID) -> str:
-    return f"customers.national_id:{customer_id}"
-
-
-def _income_context(customer_id: uuid.UUID) -> str:
-    return f"customers.monthly_income:{customer_id}"
-
-
 def _account_context(application_id: uuid.UUID) -> str:
     return f"loan_applications.receiving_account:{application_id}"
 
@@ -301,7 +294,7 @@ class ApplicationService:
                 setattr(customer, field, value)
         if changes.monthly_income is not None:
             customer.monthly_income_enc = self._cipher.encrypt(
-                str(changes.monthly_income), context=_income_context(customer.id)
+                str(changes.monthly_income), context=income_context(customer.id)
             )
         self.log("APPLICATION_UPDATE", user, application.id)
         try:
@@ -329,7 +322,7 @@ class ApplicationService:
             raise NationalIdConflict
         customer.national_id_hash = digest
         customer.national_id_enc = self._cipher.encrypt(
-            national_id, context=_national_id_context(customer.id)
+            national_id, context=national_id_context(customer.id)
         )
 
     def submit(self, user: CurrentUser, application_id: uuid.UUID) -> ApplicationView:
@@ -571,8 +564,8 @@ class ApplicationService:
         is_customer = viewer.customer_id is not None
         customer = self._db.get_one(Customer, application.customer_id)
         account = self._decrypt(application.receiving_account_enc, _account_context(application.id))
-        national_id = self._decrypt(customer.national_id_enc, _national_id_context(customer.id))
-        income = self._decrypt(customer.monthly_income_enc, _income_context(customer.id))
+        national_id = self._decrypt(customer.national_id_enc, national_id_context(customer.id))
+        income = self._decrypt(customer.monthly_income_enc, income_context(customer.id))
         history = self._db.scalars(
             select(ApplicationStatusHistory)
             .where(ApplicationStatusHistory.application_id == application.id)
@@ -645,10 +638,10 @@ class ApplicationService:
 
     def national_id_of(self, customer: Customer) -> str:
         """Số CCCD dạng rõ, chỉ dùng trong bộ nhớ (UC19 bước 1)."""
-        return self._decrypt(customer.national_id_enc, _national_id_context(customer.id)) or ""
+        return self._decrypt(customer.national_id_enc, national_id_context(customer.id)) or ""
 
     def monthly_income_of(self, customer: Customer) -> Decimal:
-        income = self._decrypt(customer.monthly_income_enc, _income_context(customer.id))
+        income = self._decrypt(customer.monthly_income_enc, income_context(customer.id))
         return Decimal(income or 0)
 
     def receiving_account_masked(self, application: LoanApplication) -> str:

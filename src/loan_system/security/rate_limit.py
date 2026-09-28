@@ -42,6 +42,8 @@ class RateLimits:
     login: SlidingWindowLimiter  # theo địa chỉ IP
     otp: SlidingWindowLimiter  # theo địa chỉ IP
     application_write: SlidingWindowLimiter  # theo người dùng
+    # SR09: không chặn, chỉ dùng để phát hiện xem PII vượt ngưỡng trong cửa sổ (AuditService).
+    pii_view: SlidingWindowLimiter  # theo actor_id
 
     @classmethod
     def from_settings(cls, settings: Settings, clock: Clock) -> "RateLimits":
@@ -51,5 +53,10 @@ class RateLimits:
             otp=SlidingWindowLimiter(clock, settings.otp_rate_limit, window),
             application_write=SlidingWindowLimiter(
                 clock, settings.application_write_rate_limit, window
+            ),
+            pii_view=SlidingWindowLimiter(
+                clock,
+                settings.pii_view_alert_threshold,
+                timedelta(minutes=settings.pii_view_alert_window_minutes),
             ),
         )
