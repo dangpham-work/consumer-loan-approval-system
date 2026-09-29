@@ -5,7 +5,12 @@ from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
 
-from loan_system.domain.applications import MAX_TERM_MONTHS, MIN_AMOUNT, MIN_TERM_MONTHS
+from loan_system.domain.applications import (
+    MAX_AMOUNT,
+    MAX_TERM_MONTHS,
+    MIN_AMOUNT,
+    MIN_TERM_MONTHS,
+)
 
 MIN_COMMENT_LENGTH = 20  # M06: nhận xét bắt buộc ≥ 20 ký tự
 
@@ -62,3 +67,22 @@ def required_approvals(tiers: Sequence[ApprovalTier], amount: Decimal) -> int:
         if tier.min_amount <= amount <= tier.max_amount:
             return tier.approvals
     raise NoApprovalTier
+
+
+class InvalidPolicyTiers(Exception):
+    """UC06 3a: khoảng hạn mức chồng lấn hoặc bị hở, thông điệp an toàn để hiển thị."""
+
+
+def validate_tiers(tiers: Sequence[ApprovalTier]) -> None:
+    """UC06 bước 3: các khoảng phải phủ kín 5–100 triệu (BR05), không chồng lấn, không bị hở."""
+    if not tiers:
+        raise InvalidPolicyTiers("Chính sách phải có ít nhất một khoảng hạn mức")
+    ordered = sorted(tiers, key=lambda t: t.min_amount)
+    for tier in ordered:
+        if tier.min_amount > tier.max_amount:
+            raise InvalidPolicyTiers("Khoảng hạn mức không hợp lệ")
+    if ordered[0].min_amount != MIN_AMOUNT or ordered[-1].max_amount != MAX_AMOUNT:
+        raise InvalidPolicyTiers(f"Các khoảng hạn mức phải phủ kín {MIN_AMOUNT:,.0f}–{MAX_AMOUNT:,.0f} đồng")
+    for prev, nxt in zip(ordered, ordered[1:]):
+        if nxt.min_amount != prev.max_amount + 1:
+            raise InvalidPolicyTiers("Các khoảng hạn mức chồng lấn hoặc bị hở")

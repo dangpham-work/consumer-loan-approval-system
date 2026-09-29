@@ -280,25 +280,30 @@ class AppraisalService:
                     monthly_income=self._applications.monthly_income_of(customer),
                 ),
             )
-        latest = self._db.scalars(
-            select(AppraisalReport)
-            .where(AppraisalReport.application_id == application.id)
-            .order_by(AppraisalReport.created_at.desc())
-        ).first()
+        latest = latest_report(self._db, application.id)
         return AppraisalView(
             application=view,
             score=explain_score(self._db, application),
             annual_rate=application.annual_rate,
             required_approvals=application.required_approvals,
-            report=(
-                ReportView(
-                    latest.recommendation, latest.proposed_amount, latest.proposed_term,
-                    latest.dti, latest.fraud_suspected, latest.comment, latest.created_at,
-                )
-                if latest is not None
-                else None
-            ),
+            report=report_view(latest) if latest is not None else None,
         )
+
+
+def latest_report(db: Session, application_id: uuid.UUID) -> AppraisalReport | None:
+    """Tờ trình có hiệu lực: tờ trình lập sau cùng (bị Trả về thì thẩm định lại, UC24 1a)."""
+    return db.scalars(
+        select(AppraisalReport)
+        .where(AppraisalReport.application_id == application_id)
+        .order_by(AppraisalReport.seq.desc())
+    ).first()
+
+
+def report_view(report: AppraisalReport) -> ReportView:
+    return ReportView(
+        report.recommendation, report.proposed_amount, report.proposed_term, report.dti,
+        report.fraud_suspected, report.comment, report.created_at,
+    )
 
 
 def _ratio(value: Decimal) -> Decimal:

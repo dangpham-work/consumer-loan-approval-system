@@ -22,6 +22,7 @@ from sqlalchemy.engine import URL
 
 from loan_system.adapters.cic import FakeCicGateway
 from loan_system.adapters.email import FakeEmailGateway
+from loan_system.adapters.payment import FakePaymentGateway
 from loan_system.adapters.sms import FakeSmsGateway
 from loan_system.config import Settings
 from loan_system.main import create_app
@@ -36,6 +37,11 @@ TABLES = [
     "notifications",
     "otp_challenges",
     "application_status_history",
+    "loan_contracts",
+    "installments",
+    "disbursements",
+    "loans",
+    "approval_decisions",
     "appraisal_reports",
     "credit_scores",
     "cic_reports",
@@ -124,6 +130,11 @@ def cic() -> FakeCicGateway:
 
 
 @pytest.fixture
+def payments() -> FakePaymentGateway:
+    return FakePaymentGateway()
+
+
+@pytest.fixture
 def scoring_model_dir(tmp_path: Path) -> Path:
     """Bản sao thư mục mô hình chấm điểm cho từng test, để ST09 thay được file mô hình."""
     target = tmp_path / "scoring_models"
@@ -139,6 +150,7 @@ def client(
     sms: FakeSmsGateway,
     email: FakeEmailGateway,
     cic: FakeCicGateway,
+    payments: FakePaymentGateway,
     scoring_model_dir: Path,
     tmp_path: Path,
 ) -> Iterator[TestClient]:
@@ -150,7 +162,7 @@ def client(
         document_storage_dir=tmp_path / "documents",
         scoring_model_dir=scoring_model_dir,
     )
-    app = create_app(settings, clock=clock, sms=sms, email=email, cic=cic)
+    app = create_app(settings, clock=clock, sms=sms, email=email, cic=cic, payments=payments)
     # https để cookie Secure (SR11) được gửi lại như trên trình duyệt thật.
     with TestClient(app, base_url="https://testserver") as test_client:
         yield test_client

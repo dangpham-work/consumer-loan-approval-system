@@ -36,10 +36,12 @@ from loan_system.domain.applications import (
 from loan_system.domain.access import CREDIT_OFFICER
 from loan_system.domain.calculations import annuity_payment
 from loan_system.domain.documents import check_document
+from loan_system.domain.loans import UNSETTLED
 from loan_system.repositories.models import (
     ApplicationDocument,
     ApplicationStatusHistory,
     Customer,
+    Loan,
     LoanApplication,
 )
 from loan_system.security.crypto import FieldCipher, blind_index
@@ -195,6 +197,19 @@ class ApplicationSummary:
     submitted_at: datetime | None
 
 
+def has_unfinished_business(db: Session, customer_id: uuid.UUID) -> bool:
+    """BR02: Khách hàng đang có Hồ sơ vay đang xử lý hoặc Khoản vay chưa tất toán."""
+    application = db.scalars(
+        select(LoanApplication.id)
+        .where(LoanApplication.customer_id == customer_id)
+        .where(LoanApplication.status.in_(IN_PROGRESS))
+    ).first()
+    loan = db.scalars(
+        select(Loan.id).where(Loan.customer_id == customer_id).where(Loan.status.in_(UNSETTLED))
+    ).first()
+    return application is not None or loan is not None
+
+
 def _account_context(application_id: uuid.UUID) -> str:
     return f"loan_applications.receiving_account:{application_id}"
 
@@ -232,12 +247,7 @@ class ApplicationService:
         ).one_or_none()
         if customer is None:
             raise CustomerNotFound
-        in_progress = self._db.scalars(
-            select(LoanApplication.id)
-            .where(LoanApplication.customer_id == customer.id)
-            .where(LoanApplication.status.in_(IN_PROGRESS))
-        ).first()
-        if in_progress is not None:
+        if has_unfinished_business(self._db, customer.id):
             raise ApplicationInProgress
         now = self._clock.now()
         application = LoanApplication(
@@ -644,8 +654,14 @@ class ApplicationService:
         income = self._decrypt(customer.monthly_income_enc, income_context(customer.id))
         return Decimal(income or 0)
 
+    def receiving_account_of(self, application: LoanApplication) -> str:
+        """Số tài khoản nhận dạng rõ, chỉ dùng trong bộ nhớ (snapshot phê duyệt, SUC02 bước 1)."""
+        return self._decrypt(
+            application.receiving_account_enc, _account_context(application.id)
+        ) or ""
+
     def receiving_account_masked(self, application: LoanApplication) -> str:
-        account = self._decrypt(application.receiving_account_enc, _account_context(application.id))
+        account = self.receiving_account_of(application)
         return mask(account) if account else ""
 
     def active_documents(self, application_id: uuid.UUID) -> list[ApplicationDocument]:

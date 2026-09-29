@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from loan_system.adapters.cic import CicGateway
 from loan_system.adapters.email import EmailGateway
+from loan_system.adapters.payment import PaymentGateway
 from loan_system.adapters.sms import SmsGateway
 from loan_system.clock import Clock
 from loan_system.config import Settings
@@ -21,6 +22,7 @@ class AppContext:
     sms: SmsGateway
     email: EmailGateway
     cic: CicGateway
+    payments: PaymentGateway
     session_factory: sessionmaker[Session]
     limits: RateLimits
 

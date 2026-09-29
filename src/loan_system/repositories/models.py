@@ -18,6 +18,7 @@ from sqlalchemy import (
     LargeBinary,
     SmallInteger,
     String,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.mssql import DATETIMEOFFSET, NVARCHAR, UNIQUEIDENTIFIER
@@ -206,6 +207,8 @@ class LoanApplication(Base):
         ),
         Index("ix_loan_applications_status_submitted", "status", "submitted_at"),
         Index("ix_loan_applications_customer", "customer_id"),
+        # Bảng có trigger (BR07): SQL Server không cho OUTPUT không kèm INTO trên bảng có trigger.
+        {"implicit_returning": False},
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
@@ -237,6 +240,9 @@ class LoanApplication(Base):
     # Người thẩm định (UC22 bước 1) và số lượt phê duyệt chốt theo hạn mức đề xuất (bước 6).
     appraised_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("employees.id"))
     required_approvals: Mapped[int | None] = mapped_column(SmallInteger)
+    # Hạn mức, kỳ hạn theo tờ trình được duyệt (UC23 bước 6): số tiền sẽ giải ngân.
+    approved_amount: Mapped[Decimal | None] = mapped_column(Money())
+    approved_term: Mapped[int | None] = mapped_column(SmallInteger)
 
     __mapper_args__ = {"version_id_col": version}
 
@@ -468,6 +474,8 @@ class AppraisalReport(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
+    # Thứ tự các tờ trình của một hồ sơ vay (không dựa vào thời điểm); seq lớn nhất có hiệu lực.
+    seq: Mapped[int] = mapped_column(BigInteger, Identity(start=1, increment=1))
     application_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("loan_applications.id"))
     appraiser_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("employees.id"))
     recommendation: Mapped[str] = mapped_column(String(10))
@@ -477,3 +485,140 @@ class AppraisalReport(Base):
     fraud_suspected: Mapped[bool] = mapped_column(Boolean, default=False)  # UC22 3a
     comment: Mapped[str] = mapped_column(NVARCHAR(1000))
     created_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
+
+
+class ApprovalDecision(Base):
+    """Quyết định phê duyệt (UC23, UC24) trên một tờ trình; bảng chỉ ghi thêm (4.1.2e)."""
+
+    __tablename__ = "approval_decisions"
+    __table_args__ = (
+        CheckConstraint(
+            "result IN ('APPROVE','REJECT','RETURN')", name="ck_approval_decisions_result"
+        ),
+        CheckConstraint(
+            "reason_group IN ('FINANCIAL_CAPACITY','CREDIT_HISTORY','FRAUD_SUSPECTED','OTHER')",
+            name="ck_approval_decisions_reason_group",
+        ),
+        CheckConstraint(
+            "result <> 'REJECT' OR reason_group IS NOT NULL",
+            name="ck_approval_decisions_reject_reason",
+        ),
+        CheckConstraint(
+            "(snapshot_hash IS NULL AND key_version IS NULL)"
+            " OR (snapshot_hash IS NOT NULL AND key_version IS NOT NULL AND result = 'APPROVE')",
+            name="ck_approval_decisions_snapshot",
+        ),
+        UniqueConstraint(
+            "appraisal_report_id", "approver_id", name="uq_approval_decisions_report_approver"
+        ),
+        Index("ix_approval_decisions_application", "application_id", "decided_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
+    application_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("loan_applications.id"))
+    appraisal_report_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("appraisal_reports.id"))
+    approver_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("employees.id"))
+    result: Mapped[str] = mapped_column(String(10))
+    reason_group: Mapped[str | None] = mapped_column(String(20))  # UC24 bước 2
+    comment: Mapped[str | None] = mapped_column(NVARCHAR(1000))
+    # HMAC-SHA256 của snapshot (SR08) và phiên bản khóa đã dùng (4.2.5), trên quyết định làm hồ
+    # sơ vay được duyệt.
+    snapshot_hash: Mapped[str | None] = mapped_column(Hash64())
+    key_version: Mapped[int | None] = mapped_column(SmallInteger)
+    decided_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
+
+
+class Loan(Base):
+    """Khoản vay sinh ra khi giải ngân thành công (UC25), cùng Lịch trả nợ (BR08)."""
+
+    __tablename__ = "loans"
+    __table_args__ = (
+        CheckConstraint("principal > 0", name="ck_loans_principal"),
+        CheckConstraint("outstanding_principal >= 0", name="ck_loans_outstanding"),
+        CheckConstraint(
+            "status IN ('ACTIVE','OVERDUE','BAD_DEBT','SETTLED')", name="ck_loans_status"
+        ),
+        CheckConstraint("debt_group BETWEEN 1 AND 5", name="ck_loans_debt_group"),
+        Index("ix_loans_customer", "customer_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
+    application_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("loan_applications.id"), unique=True
+    )
+    customer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("customers.id"))
+    principal: Mapped[Decimal] = mapped_column(Money())
+    annual_rate: Mapped[Decimal] = mapped_column(Rate())
+    term_months: Mapped[int] = mapped_column(SmallInteger)
+    monthly_payment: Mapped[Decimal] = mapped_column(Money())
+    outstanding_principal: Mapped[Decimal] = mapped_column(Money())
+    status: Mapped[str] = mapped_column(String(10))
+    debt_group: Mapped[int] = mapped_column(SmallInteger)  # BR09, tách khỏi status
+    disbursed_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
+    settled_at: Mapped[datetime | None] = mapped_column(DATETIMEOFFSET)
+
+
+class Installment(Base):
+    """Kỳ trả nợ (UC26 bước 4)."""
+
+    __tablename__ = "installments"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('UPCOMING','DUE','PARTIAL','PAID','OVERDUE','CANCELLED')",
+            name="ck_installments_status",
+        ),
+        UniqueConstraint("loan_id", "number", name="uq_installments_loan_number"),
+        Index("ix_installments_due_date", "due_date"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
+    loan_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("loans.id"))
+    number: Mapped[int] = mapped_column(SmallInteger)
+    due_date: Mapped[date] = mapped_column(Date)
+    principal_due: Mapped[Decimal] = mapped_column(Money())
+    interest_due: Mapped[Decimal] = mapped_column(Money())
+    penalty: Mapped[Decimal] = mapped_column(Money(), default=Decimal(0))
+    paid_amount: Mapped[Decimal] = mapped_column(Money(), default=Decimal(0))
+    status: Mapped[str] = mapped_column(String(10))
+
+
+class LoanContract(Base):
+    """Hợp đồng tín dụng PDF kèm mã băm SHA-256 (UC26 bước 5)."""
+
+    __tablename__ = "loan_contracts"
+
+    loan_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("loans.id"), primary_key=True)
+    content: Mapped[bytes] = mapped_column(LargeBinary(None))
+    sha256: Mapped[str] = mapped_column(Hash64())
+    created_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
+
+
+class Disbursement(Base):
+    """Một lệnh chuyển tiền vay (UC25); thất bại thì có thể có lệnh sau."""
+
+    __tablename__ = "disbursements"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('PENDING','SUCCESS','FAILED')", name="ck_disbursements_status"
+        ),
+        Index(
+            "ux_disbursements_open",
+            "application_id",
+            unique=True,
+            mssql_where=text("status IN ('PENDING','SUCCESS')"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
+    application_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("loan_applications.id"))
+    loan_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("loans.id"))
+    amount: Mapped[Decimal] = mapped_column(Money())
+    receiving_account_enc: Mapped[bytes] = mapped_column(Encrypted())  # SR06
+    transaction_ref: Mapped[str | None] = mapped_column(String(50))
+    # Gửi lại cùng khóa thì cổng thanh toán không chuyển tiền lần hai (UC25 7a).
+    idempotency_key: Mapped[str] = mapped_column(String(64), unique=True)
+    status: Mapped[str] = mapped_column(String(10))
+    failure_reason: Mapped[str | None] = mapped_column(NVARCHAR(200))
+    performed_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("employees.id"))  # SoD
+    created_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
+    completed_at: Mapped[datetime | None] = mapped_column(DATETIMEOFFSET)

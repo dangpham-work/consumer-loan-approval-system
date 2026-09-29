@@ -5,18 +5,17 @@ Chữ được in chéo lặp lại khắp ảnh và bỏ dấu tiếng Việt, 
 """
 
 import io
-import unicodedata
 from datetime import datetime
 
 from PIL import Image, ImageDraw, ImageFont, UnidentifiedImageError
+
+from loan_system.domain.text import fold_diacritics
 
 _FORMATS = {"image/jpeg": "JPEG", "image/png": "PNG"}
 
 
 def watermark_text(username: str, full_name: str, viewed_at: datetime) -> str:
-    folded = unicodedata.normalize("NFD", full_name.replace("đ", "d").replace("Đ", "D"))
-    name = "".join(c for c in folded if not unicodedata.combining(c))
-    return f"{username} - {name} - {viewed_at:%Y-%m-%d %H:%M} UTC"
+    return f"{username} - {fold_diacritics(full_name)} - {viewed_at:%Y-%m-%d %H:%M} UTC"
 
 
 def stamp_image(content: bytes, content_type: str, text: str) -> bytes | None:
