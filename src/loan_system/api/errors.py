@@ -51,6 +51,15 @@ from loan_system.services.integrity_service import IntegrityKeyMissing
 from loan_system.services.counter_service import DuplicateCustomer
 from loan_system.services.customer_service import ContactTaken, IncomeLocked
 from loan_system.services.otp_challenge_service import ChallengeFailed
+from loan_system.services.payment_service import (
+    AmountExceedsDue,
+    ChargeFailed,
+    ChargeUnavailable,
+    LoanNotFound,
+    LoanNotPayable,
+    ReceiptRequired,
+    ReferenceReused,
+)
 from loan_system.services.scoring_service import ScoreNotFound
 from loan_system.services.review_service import (
     AlreadyReceived,
@@ -157,6 +166,23 @@ FIXED: dict[type[Exception], tuple[int, str]] = {
     ),
     ContactTaken: (
         status.HTTP_409_CONFLICT, "Số điện thoại hoặc email này đã thuộc về một khách hàng khác"
+    ),
+    LoanNotFound: (status.HTTP_404_NOT_FOUND, "Không tìm thấy khoản vay"),
+    LoanNotPayable: (
+        status.HTTP_409_CONFLICT, "Khoản vay không ở trạng thái cho phép thanh toán"
+    ),
+    ReceiptRequired: (status.HTTP_400_BAD_REQUEST, "Cần nhập mã phiếu thu"),
+    ReferenceReused: (
+        status.HTTP_409_CONFLICT, "Mã phiếu thu đã được dùng cho một khoản thanh toán khác"
+    ),
+    AmountExceedsDue: (
+        status.HTTP_400_BAD_REQUEST, "Số tiền vượt quá tổng số tiền còn phải trả"
+    ),
+    ChargeFailed: (
+        status.HTTP_409_CONFLICT, "Cổng thanh toán từ chối giao dịch. Vui lòng thử lại."
+    ),
+    ChargeUnavailable: (
+        status.HTTP_409_CONFLICT, "Cổng thanh toán tạm thời không phản hồi. Vui lòng thử lại."
     ),
 }
 # Thông điệp do tầng nghiệp vụ soạn, an toàn để hiển thị.

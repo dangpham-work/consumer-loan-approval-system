@@ -27,3 +27,10 @@ class DisbursementStatus(StrEnum):
     PENDING = "PENDING"
     SUCCESS = "SUCCESS"
     FAILED = "FAILED"
+
+
+class PaymentChannel(StrEnum):
+    """UC28: khách hàng thanh toán trực tuyến, hoặc NV tín dụng ghi nhận tại quầy."""
+
+    ONLINE = "ONLINE"
+    COUNTER = "COUNTER"
