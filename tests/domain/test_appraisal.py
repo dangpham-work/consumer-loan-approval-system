@@ -5,12 +5,14 @@ from decimal import Decimal
 import pytest
 
 from loan_system.domain.appraisal import (
+    InvalidPolicyTiers,
     InvalidProposal,
     NoApprovalTier,
     Proposal,
     Recommendation,
     ApprovalTier,
     required_approvals,
+    validate_tiers,
 )
 from loan_system.domain.scoring import loan_dti
 
@@ -94,3 +96,45 @@ def test_appraisal_dti_uses_the_rate_of_the_real_grade() -> None:
 def test_an_amount_outside_every_tier_is_reported_not_crashed() -> None:
     with pytest.raises(NoApprovalTier):
         required_approvals(TIERS, Decimal(100_000_001))
+
+
+def tiers_error(tiers: list[ApprovalTier]) -> str:
+    with pytest.raises(InvalidPolicyTiers) as exc:
+        validate_tiers(tiers)
+    return str(exc.value)
+
+
+def test_tiers_covering_the_whole_range_without_gap_or_overlap_are_valid() -> None:
+    validate_tiers(TIERS)
+    validate_tiers([ApprovalTier(Decimal(5_000_000), Decimal(100_000_000), 1)])
+
+
+def test_tiers_must_start_at_the_floor_and_end_at_the_ceiling() -> None:
+    assert "phủ kín" in tiers_error([ApprovalTier(Decimal(10_000_000), Decimal(100_000_000), 1)])
+    assert "phủ kín" in tiers_error([ApprovalTier(Decimal(5_000_000), Decimal(90_000_000), 1)])
+
+
+def test_overlapping_tiers_are_rejected() -> None:
+    overlapping = [
+        ApprovalTier(Decimal(5_000_000), Decimal(60_000_000), 1),
+        ApprovalTier(Decimal(50_000_000), Decimal(100_000_000), 2),
+    ]
+    assert "chồng lấn hoặc bị hở" in tiers_error(overlapping)
+
+
+def test_gapped_tiers_are_rejected() -> None:
+    gapped = [
+        ApprovalTier(Decimal(5_000_000), Decimal(40_000_000), 1),
+        ApprovalTier(Decimal(50_000_000), Decimal(100_000_000), 2),
+    ]
+    assert "chồng lấn hoặc bị hở" in tiers_error(gapped)
+
+
+def test_a_tier_with_min_above_max_is_rejected() -> None:
+    assert tiers_error(
+        [ApprovalTier(Decimal(60_000_000), Decimal(5_000_000), 1)]
+    ) == "Khoảng hạn mức không hợp lệ"
+
+
+def test_empty_tier_list_is_rejected() -> None:
+    assert tiers_error([]) == "Chính sách phải có ít nhất một khoảng hạn mức"

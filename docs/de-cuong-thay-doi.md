@@ -128,3 +128,10 @@ Kết quả phiên hỏi đáp rà soát đề cương `De_cuong_OOAD_Vay_tin_du
 - [ ] **Tờ trình đề xuất từ chối** không có hạn mức, kỳ hạn nên không Phê duyệt được (409); Quản lý chỉ Từ chối hoặc Trả về.
 - [ ] **Thông báo**: duyệt thì báo khách hàng (SMS và trong ứng dụng, nêu hạn mức, kỳ hạn) và mọi NV giải ngân; từ chối thì báo khách hàng chỉ nhóm lý do (không kèm mô tả); trả về thì báo người thẩm định kèm nội dung cần làm rõ; chưa đủ số lượt thì báo các Quản lý phê duyệt (UC23 6a).
 - [ ] **Quy tắc gộp AD04** đã có ở tầng miền; test phê duyệt kép (TC02) và khóa lạc quan trả 409 làm ở ticket #9. Kiểm tra snapshot trước giải ngân (SUC02) làm ở ticket #10.
+
+## Phát sinh khi cài đặt (ticket #16)
+
+- [ ] **Màn hình M09** mở rộng có API: `GET /admin/roles`, `GET /admin/permissions` (bảng quyền hiện có), `POST /admin/roles` (tạo vai trò kèm tập quyền ban đầu), `PUT /admin/roles/{code}/permissions` (đổi tập quyền), `GET /admin/policies`, `POST /admin/policies` (lưu phiên bản chính sách mới). Cả bốn thao tác ghi đều yêu cầu step-up OTP (UC02) như UC04.
+- [ ] **UC05 bước 4 (quy tắc xung đột quyền)**: cụ thể hóa "ví dụ" trong đề cương thành một nhóm cố định `{APPRAISAL_SUBMIT, LOAN_APPROVE, DISBURSE}` (dây chuyền thẩm định → phê duyệt → giải ngân của BR06): một vai trò không được giữ từ hai quyền trở lên trong nhóm này. Không làm bảng cặp quyền xung đột cấu hình được vì đề cương không yêu cầu và ma trận RBAC vốn đã cố định theo migration.
+- [ ] **UC05**: tạo vai trò (`POST /admin/roles`) nhận luôn tập quyền ban đầu trong một lần gọi, không tách bước "tạo vai trò trống rồi gán quyền" vì đề cương mô tả một luồng chính duy nhất cho cả hai trường hợp. Chưa làm xóa vai trò (không có trong luồng UC05).
+- [ ] **UC06**: `POST /admin/policies` kiểm tra các khoảng hạn mức (phủ kín 5–100 triệu, không chồng lấn, không bị hở, BR05) trước khi lưu; sai thì 400 và không ghi gì. Lưu thành công thì tạo `approval_policies` phiên bản mới (số phiên bản tự tăng) và vô hiệu hóa phiên bản trước đó trong cùng giao dịch (chỉ mục lọc `is_active`). Chưa làm `approver_role_id` (đã ghi ở ticket #7: chỉ có một vai trò phê duyệt).
