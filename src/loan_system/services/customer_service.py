@@ -20,11 +20,11 @@ from sqlalchemy.orm import Session
 from loan_system.adapters.sms import SmsGateway
 from loan_system.clock import Clock
 from loan_system.config import Settings
-from loan_system.domain.applications import IN_PROGRESS, mask
-from loan_system.repositories.models import Customer, LoanApplication, User
+from loan_system.domain.applications import mask
+from loan_system.repositories.models import Customer, User
 from loan_system.security.crypto import FieldCipher, blind_index
 from loan_system.security.rate_limit import SlidingWindowLimiter
-from loan_system.services.application_service import CustomerNotFound
+from loan_system.services.application_service import CustomerNotFound, has_unfinished_business
 from loan_system.services.audit_service import AuditService
 from loan_system.services.auth_service import CurrentUser
 from loan_system.services.customer_pii import income_context, national_id_context
@@ -213,12 +213,7 @@ class CustomerService:
         return customer
 
     def _income_locked(self, customer_id: uuid.UUID) -> bool:
-        in_progress = self._db.scalars(
-            select(LoanApplication.id)
-            .where(LoanApplication.customer_id == customer_id)
-            .where(LoanApplication.status.in_(IN_PROGRESS))
-        ).first()
-        return in_progress is not None
+        return has_unfinished_business(self._db, customer_id)
 
     def _contact_taken(
         self, field: ContactField, value: str, *, exclude_customer_id: uuid.UUID

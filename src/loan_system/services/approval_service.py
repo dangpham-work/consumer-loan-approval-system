@@ -22,8 +22,8 @@ from loan_system.config import Settings
 from loan_system.domain.access import APPROVER, DISBURSER
 from loan_system.domain.applications import ApplicationStatus
 from loan_system.domain.appraisal import Recommendation
+from loan_system.domain.text import vnd
 from loan_system.domain.approval import (
-    ApprovalSnapshot,
     Decision,
     Outcome,
     RejectionReason,
@@ -36,10 +36,10 @@ from loan_system.repositories.models import (
     Employee,
     LoanApplication,
 )
-from loan_system.security.integrity import IntegrityKeyring, Signature
 from loan_system.services.application_service import ApplicationService, ApplicationView
 from loan_system.services.appraisal_service import ReportView, latest_report, report_view
 from loan_system.services.audit_service import AuditService
+from loan_system.services.integrity_service import IntegrityService
 from loan_system.services.auth_service import CurrentUser
 from loan_system.services.notification_service import NotificationService
 from loan_system.services.scoring_service import ScoreView, explain_score
@@ -91,20 +91,14 @@ class ApprovalView:
     can_decide: bool  # M07 ẩn nút quyết định; việc chặn thực sự nằm ở máy chủ
 
 
-def keyring_from(settings: Settings) -> IntegrityKeyring:
-    keys = {**settings.hmac_integrity_old_keys}
-    keys[settings.hmac_integrity_key_version] = settings.hmac_integrity_key
-    return IntegrityKeyring(keys, current=settings.hmac_integrity_key_version)
-
-
 class ApprovalService:
     def __init__(
         self, db: Session, clock: Clock, settings: Settings, sms: SmsGateway, ip: str | None
     ) -> None:
         self._db = db
         self._clock = clock
-        self._keyring = keyring_from(settings)
         self._applications = ApplicationService(db, clock, settings, sms, ip)
+        self._integrity = IntegrityService(db, settings, self._applications)
         self._notifications = NotificationService(db, clock, sms)
         self._audit = AuditService(db, clock)
         self._sod = SegregationOfDuties(db, clock, sms, ip)
@@ -164,7 +158,13 @@ class ApprovalService:
         )
         # Ký trước khi tạo bản ghi: approval_decisions chỉ ghi thêm (app_rw không có UPDATE), nên
         # mã băm phải có ngay trong câu INSERT.
-        signature = self._sign(application, report) if outcome == Outcome.APPROVED else None
+        signature = None
+        if outcome == Outcome.APPROVED:
+            # SD05 bước 10–12: chốt hạn mức, kỳ hạn của tờ trình rồi ký snapshot.
+            assert report.proposed_amount is not None and report.proposed_term is not None
+            application.approved_amount = report.proposed_amount
+            application.approved_term = report.proposed_term
+            signature = self._integrity.sign(application)
         record = ApprovalDecision(
             application_id=application.id,
             appraisal_report_id=report.id,
@@ -238,16 +238,14 @@ class ApprovalService:
         report: AppraisalReport,
         customer: Customer,
     ) -> None:
-        """SD05 bước 13–14: chốt hạn mức, kỳ hạn; chuyển Đã phê duyệt; thông báo."""
-        assert report.proposed_amount is not None and report.proposed_term is not None
-        application.approved_amount = report.proposed_amount
-        application.approved_term = report.proposed_term
+        """SD05 bước 13–14: chuyển Đã phê duyệt; thông báo."""
+        assert report.proposed_amount is not None
         self._applications.transition(application, ApplicationStatus.APPROVED, user.user_id)
         self._notifications.notify_customer(
             customer.id,
             "APPLICATION_APPROVED",
             f"Hồ sơ vay {application.code} đã được phê duyệt: "
-            f"{_vnd(report.proposed_amount)} đồng, {report.proposed_term} tháng.",
+            f"{vnd(report.proposed_amount)} đồng, {report.proposed_term} tháng.",
             phone=customer.phone,
         )
         self._notifications.notify_role(
@@ -255,23 +253,6 @@ class ApprovalService:
             "APPLICATION_APPROVED",
             f"Hồ sơ vay {application.code} đã được phê duyệt, chờ giải ngân.",
         )
-
-    def _sign(self, application: LoanApplication, report: AppraisalReport) -> Signature:
-        """SD05 bước 10–12: snapshot các trường quan trọng, HMAC bằng khóa toàn vẹn hiện hành."""
-        assert report.proposed_amount is not None and report.proposed_term is not None
-        assert application.code is not None and application.annual_rate is not None
-        account = self._applications.receiving_account_of(application)
-        assert account  # bắt buộc khi nộp hồ sơ vay (M03 bước 2)
-        snapshot = ApprovalSnapshot(
-            application_id=application.id,
-            code=application.code,
-            requested_amount=application.requested_amount,
-            approved_amount=report.proposed_amount,
-            approved_term=report.proposed_term,
-            annual_rate=application.annual_rate,
-            receiving_account=account,
-        )
-        return self._keyring.sign(snapshot.canonical())
 
     def _decisions_on(self, report: AppraisalReport) -> Sequence[ApprovalDecision]:
         return self._db.scalars(
@@ -329,8 +310,3 @@ class ApprovalService:
             ],
             can_decide=can_decide,
         )
-
-
-def _vnd(amount: Decimal) -> str:
-    """25000000 -> 25.000.000 (cách viết số tiền của người Việt)."""
-    return f"{amount:,.0f}".replace(",", ".")

@@ -37,6 +37,15 @@ from loan_system.services.approval_service import (
     ReportNotApprovable,
 )
 from loan_system.services.audit_query_service import ExportTooLarge
+from loan_system.services.auth_service import InvalidOtp
+from loan_system.services.disbursement_service import (
+    IntegrityFailure,
+    NotApproved,
+    PaymentPending,
+    PreviouslyFailed,
+    TransferRejected,
+)
+from loan_system.services.integrity_service import IntegrityKeyMissing
 from loan_system.services.counter_service import DuplicateCustomer
 from loan_system.services.customer_service import ContactTaken, IncomeLocked
 from loan_system.services.otp_challenge_service import ChallengeFailed
@@ -107,6 +116,29 @@ FIXED: dict[type[Exception], tuple[int, str]] = {
     ReportNotApprovable: (
         status.HTTP_409_CONFLICT,
         "Tờ trình đề xuất từ chối nên không thể phê duyệt. Vui lòng từ chối hoặc trả về.",
+    ),
+    NotApproved: (status.HTTP_409_CONFLICT, "Hồ sơ vay không ở trạng thái Đã phê duyệt"),
+    IntegrityFailure: (
+        status.HTTP_409_CONFLICT,
+        "Phát hiện thay đổi trên hồ sơ vay sau khi phê duyệt. Hồ sơ vay đã bị khóa.",
+    ),
+    IntegrityKeyMissing: (
+        status.HTTP_409_CONFLICT,
+        "Không kiểm tra được toàn vẹn hồ sơ vay. Vui lòng báo quản trị viên.",
+    ),
+    PreviouslyFailed: (
+        status.HTTP_409_CONFLICT,
+        "Lệnh giải ngân trước đã bị cổng thanh toán từ chối. Cần hủy hồ sơ vay để lập lại.",
+    ),
+    # Xác thực lại trước thao tác nhạy cảm (SR02): sai mã thì từ chối như thiếu quyền.
+    InvalidOtp: (status.HTTP_403_FORBIDDEN, "Mã OTP không đúng"),
+    TransferRejected: (
+        status.HTTP_409_CONFLICT,
+        "Cổng thanh toán từ chối lệnh giải ngân. Vui lòng kiểm tra tài khoản nhận với khách hàng.",
+    ),
+    PaymentPending: (
+        status.HTTP_409_CONFLICT,
+        "Cổng thanh toán tạm thời không phản hồi. Lệnh giải ngân đang chờ, vui lòng thử lại.",
     ),
     ExportTooLarge: (
         status.HTTP_409_CONFLICT,
