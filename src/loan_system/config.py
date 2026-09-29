@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     data_enc_key: str = "dev-only-data-enc-key-change-me"
     hmac_integrity_key: str = "dev-only-hmac-integrity-key-change-me"
     blind_index_key: str = "dev-only-blind-index-key-change-me"
+    # Xoay khóa toàn vẹn (4.2.5): tăng phiên bản, chuyển khóa cũ vào danh sách khóa cũ (JSON, ví dụ
+    # {"1": "..."}) để vẫn kiểm tra được snapshot của hồ sơ vay đã duyệt bằng khóa cũ.
+    hmac_integrity_key_version: int = 1
+    hmac_integrity_old_keys: dict[int, str] = {}
 
     session_idle_minutes: int = 15  # SR11
     otp_ttl_minutes: int = 5

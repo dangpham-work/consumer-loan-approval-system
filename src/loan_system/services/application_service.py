@@ -644,8 +644,14 @@ class ApplicationService:
         income = self._decrypt(customer.monthly_income_enc, income_context(customer.id))
         return Decimal(income or 0)
 
+    def receiving_account_of(self, application: LoanApplication) -> str:
+        """Số tài khoản nhận dạng rõ, chỉ dùng trong bộ nhớ (snapshot phê duyệt, SUC02 bước 1)."""
+        return self._decrypt(
+            application.receiving_account_enc, _account_context(application.id)
+        ) or ""
+
     def receiving_account_masked(self, application: LoanApplication) -> str:
-        account = self._decrypt(application.receiving_account_enc, _account_context(application.id))
+        account = self.receiving_account_of(application)
         return mask(account) if account else ""
 
     def active_documents(self, application_id: uuid.UUID) -> list[ApplicationDocument]:

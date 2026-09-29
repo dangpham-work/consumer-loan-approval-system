@@ -31,6 +31,11 @@ from loan_system.services.appraisal_service import (
     NotAppraisable,
     NotTheAppraiser,
 )
+from loan_system.services.approval_service import (
+    NotAppraised,
+    NotAwaitingApproval,
+    ReportNotApprovable,
+)
 from loan_system.services.audit_query_service import ExportTooLarge
 from loan_system.services.counter_service import DuplicateCustomer
 from loan_system.services.customer_service import ContactTaken, IncomeLocked
@@ -96,6 +101,12 @@ FIXED: dict[type[Exception], tuple[int, str]] = {
     NoApprovalTier: (
         status.HTTP_409_CONFLICT,
         "Chính sách phê duyệt không áp dụng được cho hạn mức này. Vui lòng báo quản trị viên.",
+    ),
+    NotAwaitingApproval: (status.HTTP_409_CONFLICT, "Hồ sơ vay không ở trạng thái Chờ phê duyệt"),
+    NotAppraised: (status.HTTP_409_CONFLICT, "Hồ sơ vay chưa có tờ trình thẩm định"),
+    ReportNotApprovable: (
+        status.HTTP_409_CONFLICT,
+        "Tờ trình đề xuất từ chối nên không thể phê duyệt. Vui lòng từ chối hoặc trả về.",
     ),
     ExportTooLarge: (
         status.HTTP_409_CONFLICT,

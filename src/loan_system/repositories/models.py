@@ -18,6 +18,7 @@ from sqlalchemy import (
     LargeBinary,
     SmallInteger,
     String,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.mssql import DATETIMEOFFSET, NVARCHAR, UNIQUEIDENTIFIER
@@ -237,6 +238,9 @@ class LoanApplication(Base):
     # Người thẩm định (UC22 bước 1) và số lượt phê duyệt chốt theo hạn mức đề xuất (bước 6).
     appraised_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("employees.id"))
     required_approvals: Mapped[int | None] = mapped_column(SmallInteger)
+    # Hạn mức, kỳ hạn theo tờ trình được duyệt (UC23 bước 6): số tiền sẽ giải ngân.
+    approved_amount: Mapped[Decimal | None] = mapped_column(Money())
+    approved_term: Mapped[int | None] = mapped_column(SmallInteger)
 
     __mapper_args__ = {"version_id_col": version}
 
@@ -468,6 +472,8 @@ class AppraisalReport(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
+    # Thứ tự các tờ trình của một hồ sơ vay (không dựa vào thời điểm); seq lớn nhất có hiệu lực.
+    seq: Mapped[int] = mapped_column(BigInteger, Identity(start=1, increment=1))
     application_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("loan_applications.id"))
     appraiser_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("employees.id"))
     recommendation: Mapped[str] = mapped_column(String(10))
@@ -477,3 +483,44 @@ class AppraisalReport(Base):
     fraud_suspected: Mapped[bool] = mapped_column(Boolean, default=False)  # UC22 3a
     comment: Mapped[str] = mapped_column(NVARCHAR(1000))
     created_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
+
+
+class ApprovalDecision(Base):
+    """Quyết định phê duyệt (UC23, UC24) trên một tờ trình; bảng chỉ ghi thêm (4.1.2e)."""
+
+    __tablename__ = "approval_decisions"
+    __table_args__ = (
+        CheckConstraint(
+            "result IN ('APPROVE','REJECT','RETURN')", name="ck_approval_decisions_result"
+        ),
+        CheckConstraint(
+            "reason_group IN ('FINANCIAL_CAPACITY','CREDIT_HISTORY','FRAUD_SUSPECTED','OTHER')",
+            name="ck_approval_decisions_reason_group",
+        ),
+        CheckConstraint(
+            "result <> 'REJECT' OR reason_group IS NOT NULL",
+            name="ck_approval_decisions_reject_reason",
+        ),
+        CheckConstraint(
+            "(snapshot_hash IS NULL AND key_version IS NULL)"
+            " OR (snapshot_hash IS NOT NULL AND key_version IS NOT NULL AND result = 'APPROVE')",
+            name="ck_approval_decisions_snapshot",
+        ),
+        UniqueConstraint(
+            "appraisal_report_id", "approver_id", name="uq_approval_decisions_report_approver"
+        ),
+        Index("ix_approval_decisions_application", "application_id", "decided_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
+    application_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("loan_applications.id"))
+    appraisal_report_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("appraisal_reports.id"))
+    approver_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("employees.id"))
+    result: Mapped[str] = mapped_column(String(10))
+    reason_group: Mapped[str | None] = mapped_column(String(20))  # UC24 bước 2
+    comment: Mapped[str | None] = mapped_column(NVARCHAR(1000))
+    # HMAC-SHA256 của snapshot (SR08) và phiên bản khóa đã dùng (4.2.5), trên quyết định làm hồ
+    # sơ vay được duyệt.
+    snapshot_hash: Mapped[str | None] = mapped_column(Hash64())
+    key_version: Mapped[int | None] = mapped_column(SmallInteger)
+    decided_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)

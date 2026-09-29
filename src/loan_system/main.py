@@ -8,6 +8,7 @@ from loan_system.adapters.sms import FakeSmsGateway, SmsGateway
 from loan_system.api import (
     admin,
     applications,
+    approvals,
     audit,
     auth,
     counter,
@@ -56,6 +57,7 @@ def create_app(
     app.include_router(auth.router)
     app.include_router(admin.router)
     app.include_router(applications.router)
+    app.include_router(approvals.router)
     app.include_router(counter.router)
     app.include_router(notifications.router)
     app.include_router(audit.router)
