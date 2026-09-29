@@ -1,0 +1,73 @@
+{
+  "version": "SC-2026.1",
+  "grades": [
+    {"grade": "A", "min_score": 750},
+    {"grade": "B", "min_score": 600},
+    {"grade": "C", "min_score": 450},
+    {"grade": "D", "min_score": 0}
+  ],
+  "factors": [
+    {
+      "code": "monthly_income",
+      "label": "Thu nhập hằng tháng",
+      "bands": [
+        {"max": 6999999, "points": 50},
+        {"max": 14999999, "points": 120},
+        {"max": 30000000, "points": 180},
+        {"points": 220}
+      ]
+    },
+    {
+      "code": "dti",
+      "label": "DTI sau khi vay",
+      "bands": [
+        {"max": "0.20", "points": 200},
+        {"max": "0.35", "points": 140},
+        {"points": 60}
+      ]
+    },
+    {
+      "code": "cic_debt_group",
+      "label": "Nhóm nợ CIC cao nhất trong 24 tháng",
+      "missing": 100,
+      "bands": [
+        {"max": 0, "points": 100},
+        {"max": 1, "points": 200},
+        {"points": 60}
+      ]
+    },
+    {
+      "code": "employment_years",
+      "label": "Thời gian làm việc hiện tại",
+      "bands": [
+        {"max": 0, "points": 30},
+        {"max": 3, "points": 80},
+        {"points": 120}
+      ]
+    },
+    {
+      "code": "utility_late_payments",
+      "label": "Thanh toán hóa đơn điện/nước 12 tháng",
+      "missing": 60,
+      "bands": [
+        {"max": 0, "points": 120},
+        {"max": 2, "points": 60},
+        {"points": 0}
+      ]
+    },
+    {
+      "code": "age",
+      "label": "Tuổi",
+      "bands": [
+        {"max": 24, "points": 40},
+        {"max": 45, "points": 80},
+        {"points": 60}
+      ]
+    },
+    {
+      "code": "housing_type",
+      "label": "Tình trạng nhà ở",
+      "levels": {"OWN": 60, "FAMILY": 40, "RENT": 30}
+    }
+  ]
+}

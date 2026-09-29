@@ -1,0 +1,3 @@
+# Nghĩa vụ nợ hiện có lấy giá trị lớn hơn giữa khai báo và CIC
+
+Khi tính DTI, cả ở luật loại trừ lẫn thẻ điểm, Nghĩa vụ nợ hiện có luôn là `max(số khách hàng tự khai, monthly_obligation trong Báo cáo CIC)` chứ không chỉ dùng CIC. Lý do: khai báo thấp là hành vi gian lận có chủ đích (MUC05), còn dữ liệu CIC có thể thiếu hoặc chậm cập nhật. Lấy giá trị lớn hơn luôn cho kết quả thận trọng, và vẫn chạy được khi không có CIC. Nếu số CIC vượt số khai báo trên 20% hoặc trên 1 triệu đồng, hệ thống tự gắn Cờ nghi ngờ gian lận để chuyên viên thẩm định xem xét, thay vì âm thầm thay thế số liệu. Người đọc code sau này không nên "sửa" chỗ này thành chỉ dùng số CIC.
