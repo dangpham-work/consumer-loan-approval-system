@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from loan_system.api.access import require
+from loan_system.api.applications import ApplicationResponse, respond
 from loan_system.api.deps import ClientIp, Ctx, Db
 from loan_system.services.auth_service import CurrentUser
 from loan_system.services.disbursement_service import DisbursementService
@@ -97,3 +98,11 @@ def disburse(
     return DisbursementResponse.model_validate(
         disbursements.disburse(user, application_id, body.otp)
     )
+
+
+@router.post("/{application_id}/disbursement/cancel", response_model=ApplicationResponse)
+def cancel_disbursement(
+    application_id: uuid.UUID, user: Disburser, disbursements: Disbursements
+) -> ApplicationResponse:
+    """Ticket #11 (UC25 7b): hủy để lập lại sau khi lệnh giải ngân bị cổng thanh toán từ chối."""
+    return respond(disbursements.cancel_failed(user, application_id))

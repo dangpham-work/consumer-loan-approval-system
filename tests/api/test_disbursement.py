@@ -1,4 +1,5 @@
-"""Seam 1: UC25 Giải ngân, UC26 Sinh hợp đồng và lịch trả nợ, SUC02 Kiểm tra toàn vẹn, M08 (ticket #10)."""
+"""Seam 1: UC25 Giải ngân, UC26 Sinh hợp đồng và lịch trả nợ, SUC02 Kiểm tra toàn vẹn, M08 (ticket
+#10); xử lý hồ sơ vay LOCKED và giải ngân FAILED (ticket #11)."""
 
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -251,3 +252,134 @@ def test_customer_with_an_active_loan_cannot_open_another_application(
     response = customer.post("/applications", json=LOAN)
 
     assert response.status_code == 409  # BR02: khoản vay chưa tất toán
+
+
+# --- Ticket #11: hồ sơ vay LOCKED và giải ngân FAILED ------------------------------------------
+
+
+def test_a_failed_disbursement_notifies_the_credit_officer_and_can_be_cancelled_to_redo(
+    team: Team, customer: TestClient, clock: FakeClock, payments: FakePaymentGateway,
+) -> None:
+    officer, auditor, disburser = team.officer.client, team.auditor.client, team.disburser.client
+    app_id = approved(team, customer)
+    payments.reject_account(ACCOUNT)
+    disburse(team, clock, app_id)  # 409: FAILED (Q13)
+
+    assert any(n["type"] == "DISBURSE_FAILED" for n in notifications_of(officer))
+
+    response = disburser.post(f"/applications/{app_id}/disbursement/cancel")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "CANCELLED"
+    assert status_of(customer, app_id) == "CANCELLED"
+    [entry] = auditor.get("/audit/logs", params={"action": "DISBURSE_CANCEL"}).json()
+    assert entry["target_id"] == app_id
+    # Hồ sơ vay đang xử lý đã kết thúc (BR02): khách hàng nộp hồ sơ vay mới được.
+    new_app = customer.post("/applications", json=LOAN)
+    assert new_app.status_code == 201, new_app.text
+
+
+def test_cannot_cancel_an_approved_application_without_a_failed_disbursement(
+    team: Team, customer: TestClient
+) -> None:
+    app_id = approved(team, customer)
+
+    response = team.disburser.client.post(f"/applications/{app_id}/disbursement/cancel")
+
+    assert response.status_code == 409
+    assert status_of(customer, app_id) == "APPROVED"
+
+
+def test_cannot_cancel_while_a_disbursement_is_only_pending(
+    team: Team, customer: TestClient, clock: FakeClock, payments: FakePaymentGateway
+) -> None:
+    """Lỗi tạm thời (PENDING) vẫn thử lại được, khác với FAILED (UC25 7a vs 7b)."""
+    app_id = approved(team, customer)
+    payments.unavailable_for(1)
+    disburse(team, clock, app_id)
+
+    response = team.disburser.client.post(f"/applications/{app_id}/disbursement/cancel")
+
+    assert response.status_code == 409
+    assert status_of(customer, app_id) == "APPROVED"
+    assert disburse(team, clock, app_id).status_code == 200  # vẫn thử lại được bình thường
+
+
+def test_only_a_disburser_can_cancel_a_failed_disbursement(
+    team: Team, customer: TestClient, clock: FakeClock, payments: FakePaymentGateway
+) -> None:
+    app_id = approved(team, customer)
+    payments.reject_account(ACCOUNT)
+    disburse(team, clock, app_id)
+
+    response = team.officer.client.post(f"/applications/{app_id}/disbursement/cancel")
+
+    assert response.status_code == 403
+    assert status_of(customer, app_id) == "APPROVED"
+
+
+def _locked(team: Team, customer: TestClient, clock: FakeClock, engine: Engine) -> str:
+    app_id = approved(team, customer)
+    with trigger_disabled(engine):
+        tamper_requested_amount(engine, app_id)
+    disburse(team, clock, app_id)  # 409: SUC02 khóa hồ sơ vay (ST04)
+    assert status_of(customer, app_id) == "LOCKED"
+    return app_id
+
+
+def test_auditor_resolves_a_locked_application_after_investigating(
+    team: Team, customer: TestClient, clock: FakeClock, engine: Engine
+) -> None:
+    auditor = team.auditor.client
+    app_id = _locked(team, customer, clock, engine)
+
+    response = auditor.post(
+        f"/applications/{app_id}/resolve-lock",
+        json={"reason": "Đã điều tra xong, không có gian lận"},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "CANCELLED"
+    assert status_of(customer, app_id) == "CANCELLED"
+    [entry] = auditor.get("/audit/logs", params={"action": "APPLICATION_LOCK_RESOLVE"}).json()
+    assert entry["target_id"] == app_id
+    new_app = customer.post("/applications", json=LOAN)
+    assert new_app.status_code == 201, new_app.text
+
+
+def test_resolve_lock_requires_a_reason_of_at_least_ten_characters(
+    team: Team, customer: TestClient, clock: FakeClock, engine: Engine
+) -> None:
+    app_id = _locked(team, customer, clock, engine)
+
+    response = team.auditor.client.post(
+        f"/applications/{app_id}/resolve-lock", json={"reason": "quá ngắn"}
+    )
+
+    assert response.status_code == 400  # UC24 2a: cùng quy ước với lý do từ chối, trả về
+    assert status_of(customer, app_id) == "LOCKED"
+
+
+def test_only_an_auditor_can_resolve_a_locked_application(
+    team: Team, customer: TestClient, clock: FakeClock, engine: Engine
+) -> None:
+    app_id = _locked(team, customer, clock, engine)
+
+    response = team.disburser.client.post(
+        f"/applications/{app_id}/resolve-lock",
+        json={"reason": "Đã điều tra xong, hủy hồ sơ vay"},
+    )
+
+    assert response.status_code == 403
+    assert status_of(customer, app_id) == "LOCKED"
+
+
+def test_only_locked_applications_can_be_resolved(team: Team, customer: TestClient) -> None:
+    app_id = approved(team, customer)
+
+    response = team.auditor.client.post(
+        f"/applications/{app_id}/resolve-lock", json={"reason": "Hồ sơ vay này không bị khóa"}
+    )
+
+    assert response.status_code == 409
+    assert status_of(customer, app_id) == "APPROVED"

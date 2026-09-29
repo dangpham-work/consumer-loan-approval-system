@@ -41,7 +41,7 @@ from loan_system.repositories.models import (
     LoanContract,
 )
 from loan_system.security.crypto import FieldCipher
-from loan_system.services.application_service import ApplicationService
+from loan_system.services.application_service import ApplicationService, ApplicationView
 from loan_system.services.audit_service import AuditService
 from loan_system.services.auth_service import AuthService, CurrentUser
 from loan_system.services.integrity_service import IntegrityService
@@ -59,6 +59,10 @@ class IntegrityFailure(Exception):
 
 class PreviouslyFailed(Exception):
     """UC25 7b: lệnh giải ngân trước bị cổng thanh toán từ chối; hủy hồ sơ vay để lập lại (Q13)."""
+
+
+class NoFailedDisbursement(Exception):
+    """Ticket #11: chưa có lệnh giải ngân nào bị từ chối trên hồ sơ vay này, không cần hủy để lập lại."""
 
 
 class PaymentPending(Exception):
@@ -200,6 +204,24 @@ class DisbursementService:
             raise PaymentPending from None
         return self._complete(user, application_id, disbursement_id, result)
 
+    def cancel_failed(self, user: CurrentUser, application_id: uuid.UUID) -> ApplicationView:
+        """Ticket #11 (UC25 7b, Q13): NV giải ngân hủy hồ sơ vay để lập lại sau khi cổng thanh
+        toán từ chối lệnh giải ngân, ví dụ cần đổi tài khoản nhận (không sửa được sau khi duyệt,
+        BR07) — khách hàng nộp hồ sơ vay mới. Dùng quyền `DISBURSE`, không cần OTP hay SoD: lệnh
+        FAILED làm bằng chứng người thực hiện đã qua SUC01/SUC02 ở lượt giải ngân trước đó."""
+        application = self._applications.load(user, application_id, lock=True)
+        if application.status != ApplicationStatus.APPROVED:
+            raise NotApproved
+        if not self._has_failed(application):
+            raise NoFailedDisbursement
+        application.cancel_reason = "Hủy để lập lại: lệnh giải ngân trước bị cổng thanh toán từ chối"
+        self._applications.transition(
+            application, ApplicationStatus.CANCELLED, user.user_id, application.cancel_reason
+        )
+        self._log("DISBURSE_CANCEL", user, application, None)
+        self._applications.commit()
+        return self._applications.view(application, user)
+
     # --- Nội bộ -------------------------------------------------------------------------------
 
     def _ready(self, user: CurrentUser, application_id: uuid.UUID) -> LoanApplication:
@@ -253,6 +275,11 @@ class DisbursementService:
             )
             self._db.rollback()
             return outcome
+        if disbursement.status == DisbursementStatus.FAILED:
+            # Một yêu cầu song song với cùng lệnh đã ghi nhận thất bại trước; không lặp lại nhật
+            # ký và thông báo (ticket #11).
+            self._db.rollback()
+            raise TransferRejected
         now = self._clock.now()
         if application.status != ApplicationStatus.APPROVED:
             if result.succeeded:
@@ -263,6 +290,16 @@ class DisbursementService:
             disbursement.failure_reason = result.reason
             disbursement.completed_at = now
             self._log("DISBURSE_FAILED", user, application, result.reason, level="WARNING")
+            self._notifications.notify_credit_officer(
+                application.received_by,
+                employee_type="DISBURSE_FAILED",
+                role_type="DISBURSE_FAILED",
+                content=(
+                    f"Hồ sơ vay {application.code} bị cổng thanh toán từ chối lệnh giải ngân. Liên "
+                    "hệ khách hàng; nếu cần đổi tài khoản nhận, NV giải ngân hủy hồ sơ vay để khách "
+                    "nộp hồ sơ vay mới."
+                ),
+            )
             self._applications.commit()
             raise TransferRejected
         loan = self._create_loan(application, now)

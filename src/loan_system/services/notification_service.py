@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from loan_system.adapters.sms import SmsGateway
 from loan_system.clock import Clock
-from loan_system.domain.access import AccountStatus
+from loan_system.domain.access import CREDIT_OFFICER, AccountStatus
 from loan_system.repositories.models import Notification, Role, User, UserRole
 
 MAX_LISTED = 50
@@ -58,6 +58,16 @@ class NotificationService:
         user_id = self._db.scalars(select(User.id).where(User.employee_id == employee_id)).first()
         if user_id is not None:
             self.notify(user_id, type_, content)
+
+    def notify_credit_officer(
+        self, received_by: uuid.UUID | None, *, employee_type: str, role_type: str, content: str
+    ) -> None:
+        """Báo đúng NV tín dụng đã tiếp nhận hồ sơ vay, hoặc mọi NV tín dụng nếu chưa ai tiếp nhận
+        (UC15 bước 5, ticket #11)."""
+        if received_by is not None:
+            self.notify_employee(received_by, employee_type, content)
+        else:
+            self.notify_role(CREDIT_OFFICER, role_type, content)
 
     def notify_customer(self, customer_id: uuid.UUID, type_: str, content: str, phone: str) -> None:
         """Khách vãng lai chưa có tài khoản đăng nhập được vẫn nhận SMS."""

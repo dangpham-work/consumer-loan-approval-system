@@ -149,3 +149,10 @@ Kết quả phiên hỏi đáp rà soát đề cương `De_cuong_OOAD_Vay_tin_du
 - [ ] **Ngày đến hạn** tính từ ngày giải ngân theo UTC, như mọi ngày khác trong hệ thống.
 - [ ] **BR02**: Khoản vay ACTIVE, OVERDUE, BAD_DEBT chặn lập hồ sơ vay mới và khóa đổi thu nhập (ticket #17), dùng chung một kiểm tra.
 - [ ] **Thông báo**: giải ngân thành công thì báo khách hàng (SMS và trong ứng dụng: số tiền, tài khoản đã che, kỳ trả nợ đầu tiên). Gửi hợp đồng và lịch trả nợ cho khách hàng (UC26 bước 6), xem lịch trả nợ, tải PDF thuộc ticket #12.
+
+## Phát sinh khi cài đặt (ticket #11)
+
+- [ ] **`POST /applications/{id}/disbursement/cancel`** (quyền `DISBURSE`, không cần OTP hay SoD): NV giải ngân hủy hồ sơ vay Đã phê duyệt để lập lại (APPROVED → CANCELLED), chỉ khi hồ sơ vay đã có một lệnh giải ngân FAILED (`NoFailedDisbursement` nếu chưa); lệnh PENDING (lỗi tạm thời) vẫn chỉ thử lại được, không hủy được. Không cần SoD hay OTP vì lệnh FAILED đã là bằng chứng người thực hiện lượt giải ngân trước đã qua SUC01/SUC02.
+- [ ] **Thông báo `DISBURSE_FAILED`**: cổng thanh toán từ chối lệnh giải ngân thì báo đúng NV tín dụng đã tiếp nhận hồ sơ vay (`received_by`), hoặc mọi NV tín dụng nếu hồ sơ vay do khách tự nộp — cùng mẫu với `APPLICATION_RESUBMITTED` (ticket #5).
+- [ ] **`POST /applications/{id}/resolve-lock`** (quyền `APPLICATION_LOCK_RESOLVE`, chỉ Kiểm soát viên): hủy hồ sơ vay Bị khóa sau khi điều tra xong (LOCKED → CANCELLED), lý do bắt buộc tối thiểu 10 ký tự, ghi vào `cancel_reason` và dòng lịch sử trạng thái, hành động kiểm toán `APPLICATION_LOCK_RESOLVE`. Không cần OTP: Kiểm soát viên vốn chỉ đọc, đây là ngoại lệ duy nhất (CONTEXT.md) nên không cần bước xác thực lại như UC04/UC05.
+- [ ] **Thử lại khi lỗi tạm thời (UC25 7a)**: đã có sẵn từ ticket #10 (lệnh PENDING, cùng idempotency key); ticket #11 không đổi hành vi này, chỉ thêm hai lối ra cho FAILED và LOCKED.

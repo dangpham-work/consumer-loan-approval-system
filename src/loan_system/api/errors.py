@@ -21,6 +21,7 @@ from loan_system.services.application_service import (
     NationalIdConflict,
     NeedInfoExpired,
     NotEditable,
+    NotLocked,
     NotRequested,
     TooManyDocuments,
 )
@@ -40,6 +41,7 @@ from loan_system.services.audit_query_service import ExportTooLarge
 from loan_system.services.auth_service import InvalidOtp
 from loan_system.services.disbursement_service import (
     IntegrityFailure,
+    NoFailedDisbursement,
     NotApproved,
     PaymentPending,
     PreviouslyFailed,
@@ -69,6 +71,7 @@ FIXED: dict[type[Exception], tuple[int, str]] = {
         "Khách hàng đang có một hồ sơ vay hoặc khoản vay chưa kết thúc",
     ),
     NotEditable: (status.HTTP_409_CONFLICT, "Hồ sơ vay không ở trạng thái cho phép thao tác này"),
+    NotLocked: (status.HTTP_409_CONFLICT, "Hồ sơ vay không ở trạng thái Bị khóa"),
     InvalidTransition: (
         status.HTTP_409_CONFLICT, "Hồ sơ vay không ở trạng thái cho phép thao tác này"
     ),
@@ -129,6 +132,10 @@ FIXED: dict[type[Exception], tuple[int, str]] = {
     PreviouslyFailed: (
         status.HTTP_409_CONFLICT,
         "Lệnh giải ngân trước đã bị cổng thanh toán từ chối. Cần hủy hồ sơ vay để lập lại.",
+    ),
+    NoFailedDisbursement: (
+        status.HTTP_409_CONFLICT,
+        "Hồ sơ vay chưa có lệnh giải ngân bị từ chối. Không cần hủy để lập lại.",
     ),
     # Xác thực lại trước thao tác nhạy cảm (SR02): sai mã thì từ chối như thiếu quyền.
     InvalidOtp: (status.HTTP_403_FORBIDDEN, "Mã OTP không đúng"),
