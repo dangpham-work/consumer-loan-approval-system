@@ -15,6 +15,7 @@ from loan_system.domain.access import CREDIT_OFFICER, AccountStatus
 from loan_system.repositories.models import Notification, Role, User, UserRole
 
 MAX_LISTED = 50
+SMS_ATTEMPTS = 3  # UC30 3a: gửi thất bại thì thử lại 2 lần
 
 
 class NotificationService:
@@ -76,11 +77,21 @@ class NotificationService:
             self.notify(user_id, type_, content)
         self._outbox.append((phone, content))
 
-    def deliver(self) -> None:
-        """Gửi các SMS đã xếp hàng; gọi sau khi giao dịch đã commit."""
+    def deliver(self) -> int:
+        """Gửi các SMS đã xếp hàng; gọi sau khi giao dịch đã commit. Mỗi tin thử lại 2 lần (UC30
+        3a); tin vẫn lỗi thì bỏ qua để các tin sau vẫn được gửi. Trả về số tin gửi thất bại để
+        người gọi ghi nhận (thông báo trong ứng dụng đã được lưu cùng giao dịch)."""
+        failed = 0
         for phone, content in self._outbox:
-            self._sms.send(phone, content)
+            for attempt in range(SMS_ATTEMPTS):
+                try:
+                    self._sms.send(phone, content)
+                    break
+                except Exception:
+                    if attempt == SMS_ATTEMPTS - 1:
+                        failed += 1
         self._outbox.clear()
+        return failed
 
     def list_for(self, user_id: uuid.UUID) -> list[Notification]:
         return list(

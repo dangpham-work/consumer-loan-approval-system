@@ -22,7 +22,12 @@ from loan_system.adapters.payment import PaymentGateway, PaymentUnavailable
 from loan_system.adapters.sms import SmsGateway
 from loan_system.clock import Clock
 from loan_system.domain.contract import ScheduleRow, ScheduleTerms, render_schedule
-from loan_system.domain.loans import InstallmentStatus, LoanStatus, PaymentChannel
+from loan_system.domain.loans import (
+    UNPAID_INSTALLMENT,
+    InstallmentStatus,
+    LoanStatus,
+    PaymentChannel,
+)
 from loan_system.domain.payments import Allocation, allocate_payment, remaining_balance
 from loan_system.domain.text import vnd
 from loan_system.repositories.models import (
@@ -36,11 +41,6 @@ from loan_system.services.audit_service import AuditService
 from loan_system.services.auth_service import CurrentUser
 from loan_system.services.notification_service import NotificationService
 
-# Kỳ còn có thể nhận thanh toán: chưa trả đủ và chưa bị hủy (Đã hủy thuộc ticket #14: Tất toán).
-_PAYABLE_STATUSES = frozenset(
-    {InstallmentStatus.UPCOMING, InstallmentStatus.DUE, InstallmentStatus.PARTIAL,
-     InstallmentStatus.OVERDUE}
-)
 # UC28 tiền điều kiện: chỉ khoản vay Đang hoạt động hoặc Quá hạn. Nợ xấu (BAD_DEBT) không nằm
 # trong luồng này; SETTLED thì không còn gì để trả.
 _PAYABLE_LOAN_STATUSES = frozenset({LoanStatus.ACTIVE, LoanStatus.OVERDUE})
@@ -92,6 +92,7 @@ class ScheduleView:
 
     loan_id: uuid.UUID
     status: str
+    debt_group: int  # BR09, tách khỏi status
     principal: Decimal
     annual_rate: Decimal
     term_months: int
@@ -190,7 +191,7 @@ class PaymentService:
                 paid_amount=i.paid_amount,
             )
             for i in installments
-            if i.status in _PAYABLE_STATUSES
+            if i.status in UNPAID_INSTALLMENT
         ]
         total_remaining = sum((b.total_due for b in balances), Decimal(0))
         if amount > total_remaining:
@@ -313,14 +314,23 @@ class PaymentService:
                 installment.penalty_paid += allocation.amount
             elif allocation.component == "PRINCIPAL":
                 principal_paid += allocation.amount
-            total_due = installment.penalty + installment.interest_due + installment.principal_due
-            if installment.paid_amount >= total_due:
+            if installment.amount_remaining() <= 0:
                 installment.status = InstallmentStatus.PAID
             elif installment.status == InstallmentStatus.DUE:
                 # 3.4c T05. Kỳ Chưa đến hạn được trả trước một phần vẫn Chưa đến hạn; kỳ Quá hạn
                 # chỉ rời Quá hạn khi trả đủ (T08).
                 installment.status = InstallmentStatus.PARTIAL
         loan.outstanding_principal -= principal_paid
+        if loan.status == LoanStatus.OVERDUE and not any(
+            i.status == InstallmentStatus.OVERDUE for i in installments
+        ):
+            # 3.4b T03: đã trả hết các kỳ quá hạn thì về Đang hoạt động, nhóm nợ 1.
+            self._audit.log(
+                "LOAN_STATUS_CHANGE", target_type="LOAN", target_id=loan.id,
+                detail=f"{loan.status}->{LoanStatus.ACTIVE} debt_group {loan.debt_group}->1",
+            )
+            loan.status = LoanStatus.ACTIVE
+            loan.debt_group = 1
         if loan.outstanding_principal <= 0:
             loan.outstanding_principal = Decimal(0)
             loan.status = LoanStatus.SETTLED
@@ -345,15 +355,13 @@ class PaymentService:
     def _schedule_view(self, loan: Loan, installments: list[Installment]) -> ScheduleView:
         due_now = [
             i for i in installments
-            if i.status in _PAYABLE_STATUSES and i.due_date <= self._clock.now().date()
+            if i.status in UNPAID_INSTALLMENT and i.due_date <= self._clock.now().date()
         ]
-        amount_due = sum(
-            (i.penalty + i.interest_due + i.principal_due - i.paid_amount for i in due_now),
-            Decimal(0),
-        )
-        upcoming = [i for i in installments if i.status in _PAYABLE_STATUSES]
+        amount_due = sum((i.amount_remaining() for i in due_now), Decimal(0))
+        upcoming = [i for i in installments if i.status in UNPAID_INSTALLMENT]
         return ScheduleView(
-            loan_id=loan.id, status=loan.status, principal=loan.principal,
+            loan_id=loan.id, status=loan.status, debt_group=loan.debt_group,
+            principal=loan.principal,
             annual_rate=loan.annual_rate, term_months=loan.term_months,
             outstanding_principal=loan.outstanding_principal, amount_due=amount_due,
             next_due_date=upcoming[0].due_date if upcoming else None,

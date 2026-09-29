@@ -43,7 +43,7 @@ def disbursed_loan(team: Team, customer: TestClient, clock: FakeClock, cic: Fake
 
 
 def mark_overdue(engine: Engine, loan_id: str, number: int, penalty: int) -> None:
-    """Mô phỏng kết quả tác vụ hằng đêm (ticket #13, chưa cài đặt): kỳ 1 quá hạn kèm phí phạt."""
+    """Đặt sẵn một kỳ quá hạn với phí phạt cho trước, không phụ thuộc cách tác vụ hằng đêm tính."""
     with engine.begin() as conn:
         conn.execute(
             text(

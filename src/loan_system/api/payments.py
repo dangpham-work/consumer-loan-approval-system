@@ -46,6 +46,7 @@ class ScheduleResponse(BaseModel):
 
     loan_id: uuid.UUID
     status: str
+    debt_group: int
     principal: Decimal
     annual_rate: Decimal
     term_months: int

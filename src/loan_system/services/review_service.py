@@ -123,17 +123,9 @@ class ReviewService:
         self._applications.transition(application, ApplicationStatus.VERIFIED, user.user_id)
         self._applications.log("APPLICATION_VERIFY", user, application.id)
         self._applications.commit()
-        # Hồ sơ vay "Hợp lệ" kích hoạt chấm điểm (AD02 A14, UC18), trong giao dịch riêng.
-        try:
-            self._scoring.score(application.id)
-        except Exception:
-            # Việc xác nhận đã lưu; hồ sơ vay ở lại "Hợp lệ" để được chấm lại (UC18 4a).
-            self._db.rollback()
-            self._audit.log(
-                "SCORING_FAILED", target_type="LOAN_APPLICATION", target_id=application.id,
-                level="CRITICAL",
-            )
-            self._db.commit()
+        # Hồ sơ vay "Hợp lệ" kích hoạt chấm điểm (AD02 A14, UC18), trong giao dịch riêng: việc
+        # xác nhận đã lưu dù chấm điểm lỗi.
+        self._scoring.score_or_record_failure(application.id)
         return self._applications.view(application, user)
 
     def request_info(

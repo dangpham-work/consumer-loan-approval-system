@@ -37,6 +37,7 @@ TABLES = [
     "notifications",
     "otp_challenges",
     "application_status_history",
+    "payment_reminders",
     "payment_allocations",
     "payments",
     "loan_contracts",

@@ -157,6 +157,19 @@ class ScoringService:
         self._applications.commit()
         self._notifications.deliver()
 
+    def score_or_record_failure(self, application_id: uuid.UUID) -> None:
+        """Chấm điểm; lỗi bất ngờ thì hoàn tác phần chấm điểm, ghi `SCORING_FAILED` mức CRITICAL và
+        để Hồ sơ vay ở lại "Hợp lệ" cho tác vụ hằng đêm chấm lại (UC18 4a)."""
+        try:
+            self.score(application_id)
+        except Exception:
+            self._db.rollback()
+            self._audit.log(
+                "SCORING_FAILED", target_type="LOAN_APPLICATION", target_id=application_id,
+                level="CRITICAL",
+            )
+            self._db.commit()
+
     def _active_model(self) -> RuleBasedScoringModel | None:
         """Mô hình hiệu lực nếu file của nó khớp checksum đã đăng ký (UC18 bước 4)."""
         registered = self._db.scalars(

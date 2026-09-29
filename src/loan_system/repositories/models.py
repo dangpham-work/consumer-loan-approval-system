@@ -582,6 +582,10 @@ class Installment(Base):
     paid_amount: Mapped[Decimal] = mapped_column(Money(), default=Decimal(0))
     status: Mapped[str] = mapped_column(String(10))
 
+    def amount_remaining(self) -> Decimal:
+        """Số tiền còn phải trả của kỳ, gồm cả phí phạt."""
+        return self.penalty + self.interest_due + self.principal_due - self.paid_amount
+
 
 class LoanContract(Base):
     """Hợp đồng tín dụng PDF kèm mã băm SHA-256 (UC26 bước 5)."""
@@ -663,3 +667,15 @@ class PaymentAllocation(Base):
     )
     component: Mapped[str] = mapped_column(String(10), primary_key=True)
     amount: Mapped[Decimal] = mapped_column(Money())
+
+
+class PaymentReminder(Base):
+    """Một lần nhắc nợ đã gửi cho một Kỳ trả nợ ở một mốc (UC30 bước 4)."""
+
+    __tablename__ = "payment_reminders"
+
+    installment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("installments.id"), primary_key=True
+    )
+    kind: Mapped[str] = mapped_column(String(12), primary_key=True)
+    sent_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
