@@ -10,7 +10,7 @@ trong trường ẩn `csrf`.
 
 import hmac
 import secrets
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any
@@ -20,6 +20,7 @@ from fastapi.exception_handlers import http_exception_handler
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from loan_system.api import errors
@@ -80,6 +81,7 @@ MENU = (
     MenuItem("Khoản vay của tôi", f"{PREFIX}/loans", "PAYMENT_RECORD", "CUSTOMER"),
     MenuItem("Thông tin cá nhân", f"{PREFIX}/profile", kind="CUSTOMER"),
     MenuItem("Hàng đợi hồ sơ vay", f"{PREFIX}/queue", "APPLICATION_VIEW", "EMPLOYEE"),
+    MenuItem("Nộp hộ hồ sơ vay", f"{PREFIX}/counter", "APPLICATION_CREATE", "EMPLOYEE"),
     MenuItem("Quản trị", f"{PREFIX}/admin", "USER_MANAGE"),
     MenuItem("Nhật ký kiểm toán", f"{PREFIX}/audit", "AUDIT_VIEW"),
     MenuItem("Báo cáo thống kê", f"{PREFIX}/reports", "REPORT_VIEW"),
@@ -150,6 +152,27 @@ def redirect(path: str) -> RedirectResponse:
     return RedirectResponse(path, status_code=status.HTTP_303_SEE_OTHER)
 
 
+# Ô biểu mẫu có thể để trống; kiểm tra bằng schema của REST API (`validate`).
+Entry = Annotated[str, Form()]
+
+
+def validate[M: BaseModel](
+    model: type[M], data: Mapping[str, object], messages: Mapping[str, str],
+    keep: Collection[str] = (),
+) -> tuple[M | None, list[str]]:
+    """Kiểm tra biểu mẫu bằng schema của REST API. Ô chữ để trống coi như không nhập (trừ các ô
+    trong `keep`); lỗi tiếng Anh của pydantic đổi thành `messages` theo từng trường."""
+    entered = {
+        k: v for k, v in data.items()
+        if k in keep or not isinstance(v, str) or v.strip()
+    }
+    try:
+        return model.model_validate(entered), []
+    except ValidationError as exc:
+        fields = {str(err["loc"][0]) for err in exc.errors()}
+        return None, [message for field, message in messages.items() if field in fields]
+
+
 def check_csrf(request: Request, csrf: Annotated[str, Form()] = "") -> None:
     expected = request.cookies.get(CSRF_COOKIE)
     if not expected or not hmac.compare_digest(expected.encode(), csrf.encode()):
@@ -218,6 +241,12 @@ def message_of(exc: Exception) -> str:
     """Thông điệp của lỗi nghiệp vụ, cùng câu với REST API (`api/errors.py`)."""
     fixed = errors.FIXED.get(type(exc))
     return fixed[1] if fixed else str(exc)
+
+
+def code_of(exc: Exception) -> int:
+    """Mã trạng thái của lỗi nghiệp vụ, như REST API."""
+    fixed = errors.FIXED.get(type(exc))
+    return fixed[0] if fixed else errors.OWN_MESSAGE.get(type(exc), status.HTTP_400_BAD_REQUEST)
 
 
 def _page_or_api(api_handler: Callable[..., Any], status_code: int) -> Callable[..., Any]:

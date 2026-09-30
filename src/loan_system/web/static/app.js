@@ -1,5 +1,5 @@
 // Hành vi dùng chung của mục 4.3a: đếm ngược hết phiên, hộp thoại xác nhận, nút "Hiện" dữ liệu che,
-// và số tiền trả hằng tháng ước tính của M03 bước 1.
+// số tiền trả hằng tháng ước tính của M03 bước 1 và DTI tính lại của M06.
 "use strict";
 
 // Đếm ngược cảnh báo hết phiên (SR11). Máy chủ gia hạn phiên ở mỗi yêu cầu, nên mỗi lần tải trang
@@ -94,9 +94,58 @@ function wireEstimate() {
   });
 }
 
+// M06: DTI và số tiền trả hằng tháng tính lại (ở máy chủ, theo lãi suất của Hạng) mỗi khi chuyên
+// viên đổi hạn mức hoặc kỳ hạn đề xuất. Không có JavaScript thì dùng nút "Tính lại DTI".
+function wireDtiPreview() {
+  document.querySelectorAll("form[data-dti-url]").forEach((form) => {
+    const dti = form.querySelector("[data-dti-output]");
+    const payment = form.querySelector("[data-payment-output]");
+    let timer;
+    let latest = 0;  // chỉ hiển thị kết quả của lần gọi mới nhất, bỏ phản hồi đến muộn
+    const unknown = () => {
+      dti.textContent = "—";
+      payment.textContent = "—";
+    };
+    const update = async () => {
+      const amount = form.elements.proposed_amount.value;
+      const term = form.elements.proposed_term.value;
+      const request = ++latest;
+      if (!amount || !term) {
+        unknown();
+        return;
+      }
+      const url = `${form.dataset.dtiUrl}?amount=${encodeURIComponent(amount)}&term=${encodeURIComponent(term)}`;
+      let body;
+      try {
+        const response = await fetch(url, { credentials: "same-origin" });
+        body = response.ok ? await response.json() : null;
+      } catch {
+        body = null;
+      }
+      if (request !== latest) return;
+      if (!body) {
+        unknown();
+        return;
+      }
+      const percent = (Number(body.dti) * 100).toLocaleString("vi-VN", {
+        minimumFractionDigits: 2, maximumFractionDigits: 2,
+      });
+      dti.textContent = percent + "%" + (body.within_limit ? "" : " (vượt 50%)");
+      payment.textContent = Math.round(Number(body.monthly_payment)).toLocaleString("vi-VN") + " đ";
+    };
+    ["proposed_amount", "proposed_term"].forEach((name) => {
+      form.elements[name].addEventListener("input", () => {
+        clearTimeout(timer);
+        timer = setTimeout(update, 300);
+      });
+    });
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   startIdleCountdown();
   wireConfirmDialogs();
   wireRevealButtons();
   wireEstimate();
+  wireDtiPreview();
 });

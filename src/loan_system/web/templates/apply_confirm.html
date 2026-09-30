@@ -19,6 +19,24 @@
   <dt>Tài khoản nhận tiền</dt><dd>{{ application.receiving_account or "" }}</dd>
   <dt>Giấy tờ</dt><dd>{% for d in application.documents %}{{ DOCUMENT_TYPES.get(d.doc_type, d.doc_type) }}{% if not loop.last %}, {% endif %}{% endfor %}</dd>
 </dl>
+{% if user.kind == "EMPLOYEE" %}
+{# UC12 1a: khách hàng tại quầy đồng ý nộp hồ sơ vay bằng mã OTP gửi tới điện thoại của họ. #}
+{% if challenge_id %}
+<p>Mã OTP đã được gửi tới số điện thoại của khách hàng. Mời khách hàng đọc mã để xác nhận đồng ý nộp hồ sơ vay.</p>
+<form method="post" action="/app/applications/{{ application.id }}/consent/confirm">
+  {{ csrf_field() }}
+  <input type="hidden" name="challenge_id" value="{{ challenge_id }}">
+  <label>Mã OTP của khách hàng
+    <input name="otp" inputmode="numeric" pattern="\d{6}" maxlength="6" autocomplete="off" required autofocus>
+  </label>
+  <button type="submit">Xác nhận và nộp hồ sơ vay</button>
+</form>
+{% endif %}
+<form method="post" action="/app/applications/{{ application.id }}/consent">
+  {{ csrf_field() }}
+  <button type="submit"{% if challenge_id %} class="secondary"{% endif %}>{% if challenge_id %}Gửi lại mã OTP{% else %}Gửi mã OTP cho khách hàng{% endif %}</button>
+</form>
+{% else %}
 <form method="post" action="/app/applications/{{ application.id }}/confirm">
   {{ csrf_field() }}
   <label class="check">
@@ -27,4 +45,5 @@
   </label>
   <button type="submit">{% if application.need_info %}Gửi bổ sung{% else %}Nộp hồ sơ vay{% endif %}</button>
 </form>
+{% endif %}
 {% endblock %}

@@ -25,6 +25,9 @@ APPLICATION_STATUS = {
     "LOCKED": ("Đang xử lý", "neutral"),
 }
 
+# Nhân viên thấy đúng trạng thái Bị khóa (hồ sơ vay đang được điều tra, ticket #11).
+STAFF_APPLICATION_STATUS = {**APPLICATION_STATUS, "LOCKED": ("Bị khóa", "danger")}
+
 LOAN_STATUS = {
     "ACTIVE": ("Đang vay", "ok"),
     "OVERDUE": ("Quá hạn", "danger"),
@@ -66,6 +69,10 @@ FIELDS = {
 
 ITEMS = {**FIELDS, **DOCUMENT_TYPES}
 
+VERDICTS = {"PASS": ("Đạt", "ok"), "FAIL": ("Không đạt", "danger")}
+
+RECOMMENDATIONS = {"APPROVE": "Đề xuất duyệt", "REJECT": "Đề xuất từ chối"}
+
 
 def money(amount: Decimal | int | None) -> str:
     return "" if amount is None else f"{vnd(Decimal(amount))} đ"
@@ -79,17 +86,25 @@ def day(value: date | datetime | None) -> str:
     return value.strftime("%d/%m/%Y")
 
 
+def percent(ratio: Decimal | None) -> str:
+    """Tỷ lệ (ví dụ DTI 0,4123) dạng phần trăm kiểu Việt Nam: 41,23%."""
+    return "" if ratio is None else f"{ratio * 100:.2f}%".replace(".", ",")
+
+
 def moment(value: datetime | None) -> str:
     return "" if value is None else value.astimezone(VIETNAM_TIME).strftime("%d/%m/%Y %H:%M")
 
 
 GLOBALS = {
     "APPLICATION_STATUS": APPLICATION_STATUS,
+    "STAFF_APPLICATION_STATUS": STAFF_APPLICATION_STATUS,
     "LOAN_STATUS": LOAN_STATUS,
     "PURPOSES": PURPOSES,
     "HOUSING_TYPES": HOUSING_TYPES,
     "DOCUMENT_TYPES": DOCUMENT_TYPES,
     "FIELDS": FIELDS,
     "ITEMS": ITEMS,
+    "VERDICTS": VERDICTS,
+    "RECOMMENDATIONS": RECOMMENDATIONS,
 }
-FILTERS = {"money": money, "day": day, "moment": moment}
+FILTERS = {"money": money, "day": day, "moment": moment, "percent": percent}

@@ -21,9 +21,9 @@
 <form method="post" action="/app/applications/{{ application.id }}/finance">
   {{ csrf_field() }}
   {% if a.national_id %}
-  {{ field(values, "national_id", "Số CCCD (đã khai " ~ a.national_id ~ "; để trống nếu không đổi)", attrs='inputmode="numeric" pattern="\d{12}" autocomplete="off"') }}
+  {{ field(values, "national_id", "Số CCCD (đã khai " ~ a.national_id ~ "; để trống nếu không đổi)", attrs='inputmode="numeric" pattern="\\d{12}" autocomplete="off"') }}
   {% else %}
-  {{ field(values, "national_id", "Số CCCD", attrs='inputmode="numeric" pattern="\d{12}" autocomplete="off"') }}
+  {{ field(values, "national_id", "Số CCCD", attrs='inputmode="numeric" pattern="\\d{12}" autocomplete="off"') }}
   {% endif %}
   {{ field(values, "occupation", "Nghề nghiệp", attrs='minlength="2" maxlength="50"') }}
   {{ field(values, "employer", "Nơi làm việc (không bắt buộc)", attrs='minlength="2" maxlength="100"') }}
@@ -42,9 +42,9 @@
   {% endif %}
   {{ field(values, "address", "Địa chỉ", attrs='minlength="5" maxlength="255"') }}
   {% if application.receiving_account %}
-  {{ field(values, "receiving_account", "Số tài khoản nhận tiền giải ngân (đã khai " ~ application.receiving_account ~ "; để trống nếu không đổi)", attrs='inputmode="numeric" pattern="\d{6,20}" autocomplete="off"') }}
+  {{ field(values, "receiving_account", "Số tài khoản nhận tiền giải ngân (đã khai " ~ application.receiving_account ~ "; để trống nếu không đổi)", attrs='inputmode="numeric" pattern="\\d{6,20}" autocomplete="off"') }}
   {% else %}
-  {{ field(values, "receiving_account", "Số tài khoản nhận tiền giải ngân", attrs='inputmode="numeric" pattern="\d{6,20}" autocomplete="off"') }}
+  {{ field(values, "receiving_account", "Số tài khoản nhận tiền giải ngân", attrs='inputmode="numeric" pattern="\\d{6,20}" autocomplete="off"') }}
   {% endif %}
   <button type="submit">Lưu và tiếp tục</button>
 </form>

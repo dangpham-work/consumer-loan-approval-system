@@ -14,7 +14,6 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, status
 from fastapi.responses import HTMLResponse, RedirectResponse
-from pydantic import BaseModel, ValidationError
 
 from loan_system.api.access import Auth
 from loan_system.api.applications import (
@@ -57,17 +56,23 @@ from loan_system.web.pages import (
     ERROR_MESSAGES,
     PREFIX,
     Csrf,
+    Entry,
     PageError,
     PageUser,
     message_of,
     redirect,
     render,
     require_page,
+    validate,
 )
+from loan_system.web.queue import queue_page
 
 router = APIRouter(prefix=PREFIX, include_in_schema=False)
 
 CustomerPage = Annotated[CurrentUser, Depends(require_page("APPLICATION_CREATE", "CUSTOMER"))]
+# Bước 1–3 và trang xác nhận của M03 dùng chung cho NV tín dụng nộp hộ (UC12 1a, `web/counter.py`);
+# phạm vi (chủ hồ sơ vay hoặc Người tạo) kiểm tra ở tầng nghiệp vụ.
+EditorPage = Annotated[CurrentUser, Depends(require_page("APPLICATION_CREATE"))]
 
 
 def customer_only(user: PageUser, auth: Auth) -> CurrentUser:
@@ -80,9 +85,6 @@ def customer_only(user: PageUser, auth: Auth) -> CurrentUser:
 
 
 ProfilePage = Annotated[CurrentUser, Depends(customer_only)]
-
-# Ô biểu mẫu có thể để trống; kiểm tra bằng schema của REST API (`_validate`).
-Entry = Annotated[str, Form()]
 
 TOO_MANY = ERROR_MESSAGES[status.HTTP_429_TOO_MANY_REQUESTS]
 CONSENT_REQUIRED = "Bạn cần đồng ý cho phép xử lý dữ liệu cá nhân để nộp hồ sơ vay."
@@ -111,23 +113,12 @@ STEPS = (
 )
 
 
-def _validate[M: BaseModel](
-    model: type[M], data: Mapping[str, str]
-) -> tuple[M | None, list[str]]:
-    """Kiểm tra biểu mẫu bằng schema của REST API; ô để trống coi như không nhập."""
-    try:
-        return model.model_validate({k: v for k, v in data.items() if v.strip()}), []
-    except ValidationError as exc:
-        fields = {str(err["loc"][0]) for err in exc.errors()}
-        return None, [message for field, message in FIELD_ERRORS.items() if field in fields]
-
-
 def _requested(view: ApplicationView) -> set[str] | None:
     """Mục được sửa khi bổ sung (UC15); None khi là bản nháp (sửa được mọi mục)."""
     return set(view.need_info.items) if view.need_info else None
 
 
-def _wizard(
+def wizard(
     request: Request, user: CurrentUser, step: str, view: ApplicationView | None,
     status_code: int = status.HTTP_200_OK, **context: Any,
 ) -> HTMLResponse:
@@ -141,12 +132,29 @@ def _wizard(
     )
 
 
+def detail_path(user: CurrentUser, application_id: uuid.UUID) -> str:
+    """Trang chi tiết hồ sơ vay: M02 của khách hàng, M06 của nhân viên."""
+    if user.kind == "CUSTOMER":
+        return f"{PREFIX}/applications/{application_id}"
+    return f"{PREFIX}/queue/{application_id}"
+
+
+def _editable_by(user: CurrentUser, view: ApplicationView) -> bool:
+    """Trang sửa chỉ mở cho chủ hồ sơ vay hoặc Người tạo (nhân viên nộp hộ), như `load(edit=True)`:
+    nhân viên khác xem được hồ sơ vay nhưng không được mở các bước sửa."""
+    if view.status not in EDITABLE:
+        return False
+    return user.kind == "CUSTOMER" or (
+        user.employee_id is not None and view.created_by == user.employee_id
+    )
+
+
 def _editable_or_detail(
     request: Request, user: CurrentUser, step: str, view: ApplicationView
 ) -> HTMLResponse | RedirectResponse:
-    if view.status not in EDITABLE:
-        return redirect(f"{PREFIX}/applications/{view.id}")
-    return _wizard(request, user, step, view)
+    if not _editable_by(user, view):
+        return redirect(detail_path(user, view.id))
+    return wizard(request, user, step, view)
 
 
 # --- M02 --------------------------------------------------------------------------------------
@@ -157,7 +165,9 @@ def home(
     request: Request, user: PageUser, applications: Applications, payments: Payments
 ) -> HTMLResponse:
     if user.kind != "CUSTOMER":
-        # M05 (hàng đợi hồ sơ vay) thay trang này cho nhân viên ở ticket #25.
+        # Nhân viên nghiệp vụ vào thẳng hàng đợi (M05); Quản trị viên, Kiểm soát viên thì không.
+        if "APPLICATION_VIEW" in user.permissions:
+            return queue_page(request, user, applications)
         return render(request, "home.html", user=user)
     summaries = applications.list_visible(user, None)
     loans = payments.own_loans(user)
@@ -187,11 +197,11 @@ def _loan_form(view: ApplicationView | None) -> dict[str, str]:
     }
 
 
-def _loan_step(
+def loan_step(
     request: Request, user: CurrentUser, view: ApplicationView | None, form: Mapping[str, str],
     status_code: int = status.HTTP_200_OK, **context: Any,
 ) -> HTMLResponse:
-    return _wizard(
+    return wizard(
         request, user, "loan", view, status_code,
         form=form, purposes=list(Purpose), ceiling_rate=CEILING_RATE,
         min_amount=MIN_AMOUNT, max_amount=MAX_AMOUNT,
@@ -201,7 +211,7 @@ def _loan_step(
 
 @router.get("/applications/new", response_class=HTMLResponse)
 def new_application_page(request: Request, user: CustomerPage) -> HTMLResponse:
-    return _loan_step(request, user, None, _loan_form(None))
+    return loan_step(request, user, None, _loan_form(None))
 
 
 @router.post("/applications/new", dependencies=[Csrf], response_model=None)
@@ -210,16 +220,16 @@ def create_application(
     requested_amount: Entry = "", term_months: Entry = "", purpose: Entry = "",
 ) -> HTMLResponse | RedirectResponse:
     form = {"requested_amount": requested_amount, "term_months": term_months, "purpose": purpose}
-    body, field_errors = _validate(CreateApplicationRequest, form)
+    body, field_errors = validate(CreateApplicationRequest, form, FIELD_ERRORS)
     if body is None:
-        return _loan_step(request, user, None, form, status.HTTP_400_BAD_REQUEST,
+        return loan_step(request, user, None, form, status.HTTP_400_BAD_REQUEST,
                           field_errors=field_errors)
     try:
         view = applications.create(
             user, LoanTerms(body.requested_amount, body.term_months, body.purpose)
         )
     except ApplicationInProgress as exc:
-        return _loan_step(request, user, None, form, status.HTTP_409_CONFLICT,
+        return loan_step(request, user, None, form, status.HTTP_409_CONFLICT,
                           error=message_of(exc))
     return redirect(f"{PREFIX}/applications/{view.id}/finance")
 
@@ -252,27 +262,27 @@ def cancel_application(
 
 @router.get("/applications/{application_id}/loan", response_model=None)
 def loan_page(
-    request: Request, application_id: uuid.UUID, user: CustomerPage, applications: Applications
+    request: Request, application_id: uuid.UUID, user: EditorPage, applications: Applications
 ) -> HTMLResponse | RedirectResponse:
     view = applications.get(user, application_id)
-    if view.status != ApplicationStatus.DRAFT:
+    if view.status != ApplicationStatus.DRAFT or not _editable_by(user, view):
         # Khi bổ sung không được đổi số tiền, kỳ hạn, mục đích (UC15): đi thẳng bước 2.
-        return redirect(f"{PREFIX}/applications/{view.id}" + (
-            "/finance" if view.status in EDITABLE else ""
-        ))
-    return _loan_step(request, user, view, _loan_form(view))
+        if _editable_by(user, view):
+            return redirect(f"{PREFIX}/applications/{view.id}/finance")
+        return redirect(detail_path(user, view.id))
+    return loan_step(request, user, view, _loan_form(view))
 
 
 @router.post("/applications/{application_id}/loan", dependencies=[Csrf], response_model=None)
 def update_loan(
-    request: Request, application_id: uuid.UUID, user: CustomerPage, applications: Applications,
+    request: Request, application_id: uuid.UUID, user: EditorPage, applications: Applications,
     requested_amount: Entry = "", term_months: Entry = "", purpose: Entry = "",
 ) -> HTMLResponse | RedirectResponse:
     form = {"requested_amount": requested_amount, "term_months": term_months, "purpose": purpose}
-    body, field_errors = _validate(CreateApplicationRequest, form)
+    body, field_errors = validate(CreateApplicationRequest, form, FIELD_ERRORS)
     if body is None:
         view = applications.get(user, application_id)
-        return _loan_step(request, user, view, form, status.HTTP_400_BAD_REQUEST,
+        return loan_step(request, user, view, form, status.HTTP_400_BAD_REQUEST,
                           field_errors=field_errors)
     changes = DraftChanges(
         requested_amount=body.requested_amount, term_months=body.term_months, purpose=body.purpose
@@ -286,14 +296,14 @@ def update_loan(
 
 @router.get("/applications/{application_id}/finance", response_model=None)
 def finance_page(
-    request: Request, application_id: uuid.UUID, user: CustomerPage, applications: Applications
+    request: Request, application_id: uuid.UUID, user: EditorPage, applications: Applications
 ) -> HTMLResponse | RedirectResponse:
     return _editable_or_detail(request, user, "finance", applications.get(user, application_id))
 
 
 @router.post("/applications/{application_id}/finance", dependencies=[Csrf], response_model=None)
 def update_finance(
-    request: Request, application_id: uuid.UUID, user: CustomerPage, applications: Applications,
+    request: Request, application_id: uuid.UUID, user: EditorPage, applications: Applications,
     national_id: Entry = "", occupation: Entry = "", employer: Entry = "",
     employment_years: Entry = "", monthly_income: Entry = "",
     existing_monthly_debt: Entry = "", housing_type: Entry = "", address: Entry = "",
@@ -308,9 +318,9 @@ def update_finance(
 
     def failed(code: int, **context: Any) -> HTMLResponse:
         view = applications.get(user, application_id)
-        return _wizard(request, user, "finance", view, code, form=form, **context)
+        return wizard(request, user, "finance", view, code, form=form, **context)
 
-    body, field_errors = _validate(UpdateDraftRequest, form)
+    body, field_errors = validate(UpdateDraftRequest, form, FIELD_ERRORS)
     if body is None:
         return failed(status.HTTP_400_BAD_REQUEST, field_errors=field_errors)
     changes = DraftChanges(**body.model_dump(exclude_none=True))
@@ -330,7 +340,7 @@ def _documents_step(
     status_code: int = status.HTTP_200_OK, **context: Any,
 ) -> HTMLResponse:
     uploaded = {d.doc_type: d for d in view.documents}
-    return _wizard(
+    return wizard(
         request, user, "documents", view, status_code,
         document_types=DOCUMENT_TYPES, uploaded=uploaded,
         max_mb=MAX_DOCUMENT_BYTES // (1024 * 1024), **context,
@@ -339,17 +349,17 @@ def _documents_step(
 
 @router.get("/applications/{application_id}/documents", response_model=None)
 def documents_page(
-    request: Request, application_id: uuid.UUID, user: CustomerPage, applications: Applications
+    request: Request, application_id: uuid.UUID, user: EditorPage, applications: Applications
 ) -> HTMLResponse | RedirectResponse:
     view = applications.get(user, application_id)
-    if view.status not in EDITABLE:
-        return redirect(f"{PREFIX}/applications/{view.id}")
+    if not _editable_by(user, view):
+        return redirect(detail_path(user, view.id))
     return _documents_step(request, user, view)
 
 
 @router.post("/applications/{application_id}/documents", dependencies=[Csrf], response_model=None)
 def upload_document(
-    request: Request, application_id: uuid.UUID, user: CustomerPage, applications: Applications,
+    request: Request, application_id: uuid.UUID, user: EditorPage, applications: Applications,
     ctx: Ctx, doc_type: Annotated[DocumentType, Form()], file: Annotated[UploadFile, File()],
 ) -> HTMLResponse | RedirectResponse:
     def failed(code: int, error: str) -> HTMLResponse:
@@ -375,7 +385,7 @@ def upload_document(
 
 @router.get("/applications/{application_id}/confirm", response_model=None)
 def confirm_page(
-    request: Request, application_id: uuid.UUID, user: CustomerPage, applications: Applications
+    request: Request, application_id: uuid.UUID, user: EditorPage, applications: Applications
 ) -> HTMLResponse | RedirectResponse:
     return _editable_or_detail(request, user, "confirm", applications.get(user, application_id))
 
@@ -387,7 +397,7 @@ def submit_application(
 ) -> HTMLResponse | RedirectResponse:
     def failed(code: int, **context: Any) -> HTMLResponse:
         view = applications.get(user, application_id)
-        return _wizard(request, user, "confirm", view, code, **context)
+        return wizard(request, user, "confirm", view, code, **context)
 
     # SR14: ô đồng ý không tích sẵn; máy chủ vẫn kiểm tra dù trình duyệt đã bắt buộc.
     if not accept_data_processing:
@@ -428,7 +438,7 @@ def update_profile(
                       {"profile": customers.view_self(user), "form": form, **context},
                       user=user, status_code=code)
 
-    body, field_errors = _validate(UpdateProfileRequest, form)
+    body, field_errors = validate(UpdateProfileRequest, form, FIELD_ERRORS)
     if body is None:
         return failed(status.HTTP_400_BAD_REQUEST, field_errors=field_errors)
     try:

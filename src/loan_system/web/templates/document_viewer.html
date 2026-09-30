@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Xem giấy tờ{% endblock %}
+{% block content %}
+<div class="heading">
+  <h1>{{ DOCUMENT_TYPES.get(doc_type, "Giấy tờ") }} · {{ application.code }}</h1>
+</div>
+<p class="muted">Giấy tờ chỉ để xem trên màn hình, không lưu hay chụp lại. Mỗi lượt xem được ghi nhật ký kiểm toán.</p>
+{# Ảnh đã được in watermark ở máy chủ; PDF được phủ watermark lên trên (MUC06). #}
+<div class="viewer">
+  {% if is_pdf %}
+  <object data="data:{{ content_type }};base64,{{ data }}" type="{{ content_type }}" aria-label="Giấy tờ"></object>
+  {% else %}
+  <img src="data:{{ content_type }};base64,{{ data }}" alt="Giấy tờ">
+  {% endif %}
+  <div class="watermark" aria-hidden="true">{% for _ in range(12) %}<span>{{ watermark }}</span>{% endfor %}</div>
+</div>
+<p><a href="/app/queue/{{ application.id }}">Về hồ sơ vay</a></p>
+{% endblock %}

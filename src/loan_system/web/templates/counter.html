@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field, errors with context %}
+{% block title %}Nộp hộ hồ sơ vay{% endblock %}
+{% block content %}
+<h1>Nộp hộ hồ sơ vay</h1>
+<section class="card">
+  <h2>Khách hàng đã có tài khoản</h2>
+  {{ errors(None, lookup_errors or ()) }}
+  <form method="post" action="/app/counter/lookup" class="inline">
+    {{ csrf_field() }}
+    <label>Số CCCD
+      <input name="national_id" inputmode="numeric" pattern="\d{12}" maxlength="12" autocomplete="off" required>
+    </label>
+    <button type="submit" class="secondary">Tìm</button>
+  </form>
+  {% if found %}
+  <dl class="summary">
+    <dt>Họ tên</dt><dd>{{ found.full_name }}</dd>
+    <dt>Ngày sinh</dt><dd>{{ found.dob | day }}</dd>
+    <dt>Số CCCD</dt><dd>{{ found.national_id or "" }}</dd>
+    <dt>Số điện thoại</dt><dd>{{ found.phone }}</dd>
+  </dl>
+  <p><a class="button" href="/app/counter/customers/{{ found.id }}/applications/new">Lập hồ sơ vay cho khách hàng này</a></p>
+  {% endif %}
+</section>
+<section class="card">
+  <h2>Khách vãng lai</h2>
+  <p class="muted">Khách hàng sẽ nhận mã OTP qua điện thoại để đồng ý lưu thông tin và xử lý dữ liệu cá nhân.</p>
+  {{ errors(None, walk_in_errors or ()) }}
+  <form method="post" action="/app/counter/walk-in">
+    {{ csrf_field() }}
+    <label>Họ tên <input name="full_name" value="{{ walk_in.full_name }}" minlength="2" maxlength="100" required></label>
+    <label>Ngày sinh <input type="date" name="date_of_birth" value="{{ walk_in.date_of_birth }}" required></label>
+    <label>Số điện thoại <input name="phone" value="{{ walk_in.phone }}" inputmode="tel" pattern="0\d{9}" required></label>
+    <label>Email <input type="email" name="email" value="{{ walk_in.email }}" required></label>
+    <button type="submit">Gửi mã OTP cho khách hàng</button>
+  </form>
+</section>
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% from "_macros.html" import badge %}
+{% block title %}Hàng đợi hồ sơ vay{% endblock %}
+{% block content %}
+<div class="heading">
+  <h1>Hàng đợi hồ sơ vay</h1>
+  {% if "APPLICATION_CREATE" in user.permissions %}<a class="button" href="/app/counter">Nộp hộ hồ sơ vay</a>{% endif %}
+</div>
+<form method="get" action="/app/queue" class="card filters">
+  <label>Trạng thái
+    <select name="status">
+      <option value=""{% if not selected %} selected{% endif %}>Việc cần làm</option>
+      <option value="{{ all }}"{% if selected == all %} selected{% endif %}>Tất cả</option>
+      {% for s in statuses %}
+      <option value="{{ s }}"{% if selected == s %} selected{% endif %}>{{ STAFF_APPLICATION_STATUS[s][0] }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Tìm theo mã hồ sơ vay hoặc họ tên
+    <input type="search" name="q" value="{{ q }}" maxlength="100">
+  </label>
+  <button type="submit" class="secondary">Lọc</button>
+</form>
+<section class="card">
+  {% if applications %}
+  <table class="table">
+    <thead><tr><th>Mã hồ sơ vay</th><th>Khách hàng</th><th>Số tiền</th><th>Kỳ hạn</th><th>Ngày nộp</th><th>Trạng thái</th></tr></thead>
+    <tbody>
+    {% for a in applications %}
+    {% set label, tone = STAFF_APPLICATION_STATUS.get(a.status, (a.status, "neutral")) %}
+    <tr>
+      <td><a href="/app/queue/{{ a.id }}">{{ a.code or "(nháp nộp hộ)" }}</a></td>
+      <td>{{ a.customer_name }}</td>
+      <td>{{ a.requested_amount | money }}</td>
+      <td>{{ a.term_months }} tháng</td>
+      <td>{{ a.submitted_at | moment }}</td>
+      <td>{{ badge(label, tone) }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">Không có hồ sơ vay nào phù hợp.</p>
+  {% endif %}
+</section>
+{% endblock %}

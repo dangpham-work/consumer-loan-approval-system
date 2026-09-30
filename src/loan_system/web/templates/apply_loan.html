@@ -1,6 +1,6 @@
 {% extends "_wizard.html" %}
 {% block step %}
-<form method="post" action="{% if application %}/app/applications/{{ application.id }}/loan{% else %}/app/applications/new{% endif %}"
+<form method="post" action="{% if form_action %}{{ form_action }}{% elif application %}/app/applications/{{ application.id }}/loan{% else %}/app/applications/new{% endif %}"
       data-estimate data-ceiling-rate="{{ ceiling_rate }}">
   {{ csrf_field() }}
   <label>Số tiền vay (từ {{ min_amount | money }} đến {{ max_amount | money }})

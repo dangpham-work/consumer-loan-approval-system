@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field, errors with context %}
+{% block title %}Xác nhận của khách hàng{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Xác nhận của khách hàng</h1>
+  <p>Mã OTP đã được gửi tới số điện thoại của khách hàng. Mời khách hàng đọc mã để đồng ý lưu thông tin và xử lý dữ liệu cá nhân.</p>
+  {{ errors(error) }}
+  <form method="post" action="{{ action }}">
+    {{ csrf_field() }}
+    <input type="hidden" name="challenge_id" value="{{ challenge_id }}">
+    <label>Mã OTP của khách hàng
+      <input name="otp" inputmode="numeric" pattern="\d{6}" maxlength="6" autocomplete="off" required autofocus>
+    </label>
+    <button type="submit">Xác nhận</button>
+  </form>
+  <p><a href="/app/counter">Quay lại</a></p>
+</section>
+{% endblock %}

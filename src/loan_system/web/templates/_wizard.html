@@ -3,7 +3,7 @@
 {% from "_macros.html" import csrf_field, errors, need_info_notice with context %}
 {% block title %}Nộp hồ sơ vay{% endblock %}
 {% block content %}
-<h1>{% if application and application.need_info %}Bổ sung hồ sơ vay{% else %}Nộp hồ sơ vay{% endif %}{% if application and application.code %} {{ application.code }}{% endif %}</h1>
+<h1>{% if application and application.need_info %}Bổ sung hồ sơ vay{% elif user.kind == "EMPLOYEE" %}Nộp hộ hồ sơ vay{% else %}Nộp hồ sơ vay{% endif %}{% if application and application.code %} {{ application.code }}{% endif %}</h1>
 <ol class="steps">
   {% for key, label in steps %}
   <li{% if key == step %} aria-current="step"{% endif %}>

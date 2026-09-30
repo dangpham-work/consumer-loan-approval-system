@@ -3,13 +3,15 @@
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 
-from loan_system.web import auth, customer, pages
+from loan_system.web import auth, counter, customer, pages, queue
 
 
 def register(app: FastAPI) -> None:
     pages.register(app)
     app.include_router(auth.router)
     app.include_router(customer.router)
+    app.include_router(queue.router)
+    app.include_router(counter.router)
 
     @app.get("/", include_in_schema=False)
     def root() -> RedirectResponse:
