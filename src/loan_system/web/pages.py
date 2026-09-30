@@ -65,6 +65,11 @@ NOTICES = {
     "profile_saved": "Đã lưu thông tin cá nhân.",
     "paid": "Đã ghi nhận thanh toán.",
     "settled": "Đã tất toán khoản vay.",
+    "staff_created": "Đã tạo tài khoản nhân viên. Mật khẩu tạm đã gửi tới email công việc.",
+    "roles_saved": "Đã cập nhật vai trò.",
+    "role_created": "Đã tạo vai trò.",
+    "permissions_saved": "Đã cập nhật quyền.",
+    "policy_saved": "Đã lưu phiên bản chính sách mới. Hồ sơ vay chờ phê duyệt từ nay dùng phiên bản này.",
 }
 
 
@@ -84,19 +89,22 @@ MENU = (
     MenuItem("Thông tin cá nhân", f"{PREFIX}/profile", kind="CUSTOMER"),
     MenuItem("Hàng đợi hồ sơ vay", f"{PREFIX}/queue", "APPLICATION_VIEW", "EMPLOYEE"),
     MenuItem("Nộp hộ hồ sơ vay", f"{PREFIX}/counter", "APPLICATION_CREATE", "EMPLOYEE"),
+    # M09 có ba thẻ theo ba quyền: mục "Quản trị" dẫn tới thẻ đầu tiên người dùng được mở.
     MenuItem("Quản trị", f"{PREFIX}/admin", "USER_MANAGE"),
+    MenuItem("Quản trị", f"{PREFIX}/admin/roles", "ROLE_MANAGE"),
+    MenuItem("Quản trị", f"{PREFIX}/admin/policies", "POLICY_CONFIGURE"),
     MenuItem("Nhật ký kiểm toán", f"{PREFIX}/audit", "AUDIT_VIEW"),
     MenuItem("Báo cáo thống kê", f"{PREFIX}/reports", "REPORT_VIEW"),
 )
 
 
 def menu_for(user: CurrentUser) -> list[MenuItem]:
-    return [
-        item
-        for item in MENU
-        if (item.permission is None or item.permission in user.permissions)
-        and (item.kind is None or item.kind == user.kind)
-    ]
+    shown: dict[str, MenuItem] = {}
+    for item in MENU:
+        if ((item.permission is None or item.permission in user.permissions)
+                and (item.kind is None or item.kind == user.kind)):
+            shown.setdefault(item.label, item)
+    return list(shown.values())
 
 
 class PageError(Exception):

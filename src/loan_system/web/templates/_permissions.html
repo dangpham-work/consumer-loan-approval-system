@@ -1,0 +1,8 @@
+{# Bảng chọn quyền của UC05; `permissions` là danh sách (mã, mô tả), `chosen` là các mã đang chọn. #}
+<fieldset>
+  <legend>Quyền</legend>
+  {% for code, description in permissions %}
+  <label class="check"><input type="checkbox" name="permissions" value="{{ code }}"{% if code in chosen %} checked{% endif %}> {{ description }} ({{ code }})</label>
+  {% endfor %}
+</fieldset>
+<p class="muted">Một vai trò không được giữ từ hai quyền trở lên trong nhóm thẩm định, phê duyệt, giải ngân (APPRAISAL_SUBMIT, LOAN_APPROVE, DISBURSE).</p>

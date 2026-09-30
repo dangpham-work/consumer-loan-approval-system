@@ -88,6 +88,19 @@ INSTALLMENT_STATUS = {
     "CANCELLED": ("Đã hủy", "neutral"),
 }
 
+ACCOUNT_STATUS = {
+    "PENDING": ("Chờ kích hoạt", "warn"),
+    "ACTIVE": ("Đang hoạt động", "ok"),
+    "LOCKED": ("Bị khóa", "danger"),
+    "DISABLED": ("Vô hiệu hóa", "neutral"),
+}
+
+AUDIT_LEVEL = {
+    "INFO": ("INFO", "neutral"),
+    "WARNING": ("WARNING", "warn"),
+    "CRITICAL": ("CRITICAL", "danger"),
+}
+
 
 def money(amount: Decimal | int | None) -> str:
     return "" if amount is None else f"{vnd(Decimal(amount))} đ"
@@ -124,5 +137,7 @@ GLOBALS = {
     "DECISIONS": DECISIONS,
     "REJECTION_REASONS": REJECTION_REASONS,
     "INSTALLMENT_STATUS": INSTALLMENT_STATUS,
+    "ACCOUNT_STATUS": ACCOUNT_STATUS,
+    "AUDIT_LEVEL": AUDIT_LEVEL,
 }
 FILTERS = {"money": money, "day": day, "moment": moment, "percent": percent}

@@ -73,7 +73,7 @@ Kết quả phiên hỏi đáp rà soát đề cương `De_cuong_OOAD_Vay_tin_du
 - [ ] **`customers.employer`**: thêm cột nơi làm việc (M03 bước 2 có trường này nhưng lược đồ 4.1.2d không có).
 - [ ] **Số tiền trả hằng tháng ước tính (M03 bước 1)**: tính theo lãi suất trần 28%/năm (hạng C), vì lúc lập hồ sơ vay chưa có Hạng.
 - [ ] **Nộp hồ sơ vay**: bắt buộc đủ thông tin bước 2 (trừ nơi làm việc) và cả 4 loại giấy tờ (CCCD 2 mặt, chứng minh thu nhập, hóa đơn điện/nước). CCCD không đổi được nữa khi khách hàng đã từng nộp một hồ sơ vay.
-- [ ] **Màn hình Jinja2** (M03, M09) chưa làm trong ticket #3, #4: mới có API. M01 làm ở ticket #22, M02 và M03 ở ticket #23.
+- [x] **Màn hình Jinja2** (M03, M09) chưa làm trong ticket #3, #4: mới có API. M01 làm ở ticket #22, M02 và M03 ở ticket #23, M09 ở ticket #27.
 
 ## Phát sinh khi cài đặt (ticket #5)
 
@@ -140,7 +140,7 @@ Kết quả phiên hỏi đáp rà soát đề cương `De_cuong_OOAD_Vay_tin_du
 
 ## Phát sinh khi cài đặt (ticket #16)
 
-- [ ] **Màn hình M09** mở rộng có API: `GET /admin/roles`, `GET /admin/permissions` (bảng quyền hiện có), `POST /admin/roles` (tạo vai trò kèm tập quyền ban đầu), `PUT /admin/roles/{code}/permissions` (đổi tập quyền), `GET /admin/policies`, `POST /admin/policies` (lưu phiên bản chính sách mới). Cả bốn thao tác ghi đều yêu cầu step-up OTP (UC02) như UC04.
+- [x] **Màn hình M09** (trang web ở ticket #27) mở rộng có API: `GET /admin/roles`, `GET /admin/permissions` (bảng quyền hiện có), `POST /admin/roles` (tạo vai trò kèm tập quyền ban đầu), `PUT /admin/roles/{code}/permissions` (đổi tập quyền), `GET /admin/policies`, `POST /admin/policies` (lưu phiên bản chính sách mới). Cả bốn thao tác ghi đều yêu cầu step-up OTP (UC02) như UC04.
 - [ ] **UC05 bước 4 (quy tắc xung đột quyền)**: cụ thể hóa "ví dụ" trong đề cương thành một nhóm cố định `{APPRAISAL_SUBMIT, LOAN_APPROVE, DISBURSE}` (dây chuyền thẩm định → phê duyệt → giải ngân của BR06): một vai trò không được giữ từ hai quyền trở lên trong nhóm này. Không làm bảng cặp quyền xung đột cấu hình được vì đề cương không yêu cầu và ma trận RBAC vốn đã cố định theo migration.
 - [ ] **UC05**: tạo vai trò (`POST /admin/roles`) nhận luôn tập quyền ban đầu trong một lần gọi, không tách bước "tạo vai trò trống rồi gán quyền" vì đề cương mô tả một luồng chính duy nhất cho cả hai trường hợp. Chưa làm xóa vai trò (không có trong luồng UC05).
 - [ ] **UC06**: `POST /admin/policies` kiểm tra các khoảng hạn mức (phủ kín 5–100 triệu, không chồng lấn, không bị hở, BR05) trước khi lưu; sai thì 400 và không ghi gì. Lưu thành công thì tạo `approval_policies` phiên bản mới (số phiên bản tự tăng) và vô hiệu hóa phiên bản trước đó trong cùng giao dịch (chỉ mục lọc `is_active`). Chưa làm `approver_role_id` (đã ghi ở ticket #7: chỉ có một vai trò phê duyệt).
@@ -249,3 +249,12 @@ Kết quả phiên hỏi đáp rà soát đề cương `De_cuong_OOAD_Vay_tin_du
 - [ ] **Thanh toán trên M04**: khách hàng thanh toán trực tuyến, biểu mẫu mang sẵn `idempotency_key` ngẫu nhiên cho lượt thanh toán đó; gửi lại cùng biểu mẫu chỉ bị thu một lần. Cổng thanh toán từ chối thì trang cấp khóa mới (cổng nhớ kết quả theo khóa, gửi lại cùng khóa sẽ bị từ chối mãi); cổng không phản hồi hoặc nhập sai thì giữ khóa cũ vì tiền có thể đã được thu. NV tín dụng ghi nhận tiền mặt tại quầy, bắt buộc mã phiếu thu, không có khóa.
 - [ ] **Tất toán trên M04**: người có `LOAN_SETTLE` thấy báo giá trong ngày (gốc, lãi đã đến hạn, lãi phát sinh, phí phạt, phí trả trước hạn, tổng) và nút Tất toán có hộp thoại xác nhận; biểu mẫu gửi đúng số tiền và ngày của báo giá đang xem. Báo giá của ngày khác thì 409, trang báo "Vui lòng xem lại số tiền tất toán" kèm báo giá mới. Khoản vay đã tất toán chỉ còn bảng kỳ (các kỳ còn lại "Đã hủy"). Bấm Tất toán (hoặc trả hết) hai lần thì yêu cầu thứ hai thấy khoản vay đã tất toán: trang báo "Đã tất toán khoản vay" thay vì báo lỗi, tiền chỉ bị thu một lần.
 - [ ] **Khách hàng tải hợp đồng PDF** (ticket #26 để lại) vẫn chưa làm: M04 chỉ có lịch trả nợ PDF.
+
+## Phát sinh khi cài đặt (ticket #27)
+
+- [ ] **Đường dẫn M09**: ba thẻ `/app/admin` (tài khoản nhân viên, cần `USER_MANAGE`), `/app/admin/roles` (vai trò – quyền, `ROLE_MANAGE`), `/app/admin/policies` (chính sách phê duyệt, `POLICY_CONFIGURE`); đổi vai trò một nhân viên ở `/app/admin/users/{id}`, đổi quyền một vai trò ở `/app/admin/roles/{code}`. Thêm `StaffService.list_staff` và `StaffService.get` (danh sách tài khoản nhân viên kèm vai trò, UC04 bước 1): REST API chưa có endpoint liệt kê nhân viên.
+- [ ] **Step-up trên M09**: mỗi biểu mẫu ghi có ô mã TOTP; kiểm tra dữ liệu bằng schema của REST API trước, rồi mới xác thực lại TOTP (nhập sai dữ liệu không tốn một lần sai OTP), rồi mới lưu. Sai mã thì 403 và giữ lại các ô đã nhập; sai quá số lần cho phép thì phiên bị hủy như REST API.
+- [ ] **Bảng chính sách trên M09**: lãi suất và phí trả trước hạn nhập theo phần trăm (19 hoặc 19,5), trang đổi sang tỷ lệ như REST API nhận; biểu mẫu điền sẵn từ phiên bản đang hiệu lực, thêm hai hàng hạn mức trống, hàng để trống cả ba ô thì bỏ qua. Lưu có hộp thoại xác nhận vì phiên bản mới có hiệu lực ngay.
+- [ ] **Đường dẫn M10**: `/app/audit` (cần `AUDIT_VIEW`), 50 bản ghi mỗi trang, mới nhất trước. Lọc theo khoảng ngày (giờ Việt Nam, tính trọn ngày ở hai đầu), người thực hiện theo tên đăng nhập (thêm `AuditQueryService.actor_id` và `usernames`; bảng hiện tên đăng nhập thay cho mã định danh, bản ghi không có người thực hiện hiện "Hệ thống"), hành động và mức độ. Nhập sai bộ lọc thì 400 kèm thông báo. "Xuất CSV" (`/app/audit/export`) dùng đúng bộ lọc đang xem, cùng định dạng và giới hạn dòng với REST API.
+- [ ] **Kiểm tra toàn vẹn trên M10**: nút "Kiểm tra toàn vẹn chuỗi" (POST `/app/audit/verify`, cần `AUDIT_VERIFY`) duyệt lại toàn bộ chuỗi băm và báo "toàn vẹn" hoặc số của bản ghi đầu tiên bị phá vỡ (ST08 qua giao diện: sửa thẳng một bản ghi bằng tài khoản quản trị CSDL thì trang chỉ ra đúng bản ghi đó). Lần kiểm tra không ghi nhật ký, như REST API.
+- [ ] **Menu "Quản trị"** dẫn tới thẻ M09 đầu tiên người dùng được mở (`USER_MANAGE`, `ROLE_MANAGE` hoặc `POLICY_CONFIGURE`), để vai trò tùy biến chỉ có quyền chính sách vẫn vào được M09.

@@ -149,6 +149,11 @@ fieldset { border: 1px solid var(--border); border-radius: var(--radius); margin
 fieldset label.check { display: inline-flex; margin-right: 1rem; }
 form.inline input[name="note"] { width: auto; flex: 1; }
 
+/* Thẻ của M09 Quản trị. */
+.tabs { display: flex; gap: 0.25rem; margin: 0 0 1rem; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.tabs a { padding: 0.5rem 0.9rem; color: var(--text); text-decoration: none; border-bottom: 2px solid transparent; }
+.tabs a[aria-current="page"] { color: var(--primary); font-weight: 600; border-bottom-color: var(--primary); }
+
 /* Trình xem giấy tờ: watermark phủ lên nội dung, không chặn được thao tác nhưng luôn hiện trong ảnh chụp. */
 .viewer { position: relative; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 .viewer img { display: block; max-width: 100%; margin: 0 auto; }

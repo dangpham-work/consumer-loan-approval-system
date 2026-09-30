@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field, errors with context %}
+{% block title %}Quyền của vai trò {{ role.code }}{% endblock %}
+{% block content %}
+<h1>Quyền của vai trò {{ role.name }} ({{ role.code }})</h1>
+{% include "_admin_tabs.html" %}
+<section class="card">
+  {{ errors(error, field_errors or ()) }}
+  <form method="post" action="/app/admin/roles/{{ role.code }}/permissions">
+    {{ csrf_field() }}
+    {% include "_permissions.html" %}
+    {% include "_step_up.html" %}
+    <div class="actions">
+      <a class="button secondary" href="/app/admin/roles">Quay lại</a>
+      <button type="submit">Lưu quyền</button>
+    </div>
+  </form>
+</section>
+{% endblock %}
