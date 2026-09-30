@@ -185,6 +185,17 @@ class PaymentService:
         self._db.rollback()  # chỉ đọc
         return views
 
+    def loan_of_application(self, user: CurrentUser, application_id: uuid.UUID) -> uuid.UUID:
+        """Khoản vay sinh ra từ hồ sơ vay đã giải ngân; nhân viên mở M04 từ chi tiết hồ sơ vay."""
+        query = select(Loan.id).where(Loan.application_id == application_id)
+        if user.customer_id is not None:
+            query = query.where(Loan.customer_id == user.customer_id)
+        loan_id = self._db.scalars(query).one_or_none()
+        self._db.rollback()  # chỉ đọc
+        if loan_id is None:
+            raise LoanNotFound
+        return loan_id
+
     def schedule_pdf(self, user: CurrentUser, loan_id: uuid.UUID) -> bytes:
         loan = self._load(user, loan_id)
         installments = self._installments(loan.id)

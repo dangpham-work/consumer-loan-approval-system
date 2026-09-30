@@ -11,7 +11,7 @@
 <section class="card">
   <h2>Khoản vay</h2>
   <table class="table">
-    <thead><tr><th>Số tiền vay</th><th>Dư nợ gốc</th><th>Trạng thái</th><th>Kỳ đến hạn tiếp theo</th><th>Số tiền kỳ đó</th><th>Cần thanh toán ngay</th></tr></thead>
+    <thead><tr><th>Số tiền vay</th><th>Dư nợ gốc</th><th>Trạng thái</th><th>Kỳ đến hạn tiếp theo</th><th>Số tiền kỳ đó</th><th>Cần thanh toán ngay</th><th></th></tr></thead>
     <tbody>
     {% for loan in loans %}
     {% set label, tone = LOAN_STATUS.get(loan.status, (loan.status, "neutral")) %}
@@ -22,6 +22,7 @@
       <td>{{ loan.next_due_date | day }}</td>
       <td>{{ loan.next_due_amount | money }}</td>
       <td>{{ loan.amount_due | money }}</td>
+      <td class="row-actions"><a href="/app/loans/{{ loan.loan_id }}">Thanh toán</a></td>
     </tr>
     {% endfor %}
     </tbody>

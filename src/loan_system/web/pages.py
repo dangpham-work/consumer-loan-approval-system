@@ -63,6 +63,8 @@ NOTICES = {
     "submitted": "Đã nộp hồ sơ vay. Chúng tôi sẽ thông báo khi có kết quả.",
     "cancelled": "Đã hủy hồ sơ vay.",
     "profile_saved": "Đã lưu thông tin cá nhân.",
+    "paid": "Đã ghi nhận thanh toán.",
+    "settled": "Đã tất toán khoản vay.",
 }
 
 

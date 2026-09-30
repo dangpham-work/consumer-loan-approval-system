@@ -21,6 +21,9 @@
 {% if "DISBURSE" in user.permissions and application.status in ("APPROVED", "DISBURSED", "LOCKED") %}
 <p><a class="button" href="/app/queue/{{ application.id }}/disbursement">{{ "Giải ngân" if application.status == "APPROVED" else "Xem giải ngân" }}</a></p>
 {% endif %}
+{% if "PAYMENT_RECORD" in user.permissions and application.status == "DISBURSED" %}
+<p><a class="button" href="/app/queue/{{ application.id }}/loan">Lịch trả nợ, thu tiền tại quầy</a></p>
+{% endif %}
 {% if application.status in ("DRAFT", "NEED_INFO") and application.created_by and application.created_by == user.employee_id %}
 <p><a class="button" href="/app/applications/{{ application.id }}/finance">Tiếp tục lập hồ sơ vay</a></p>
 {% endif %}
