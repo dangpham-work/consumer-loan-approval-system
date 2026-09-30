@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from loan_system.domain.applications import InvalidTransition
 from loan_system.domain.appraisal import InvalidProposal, NoApprovalTier
 from loan_system.domain.documents import InvalidDocument
+from loan_system.domain.report import DateRangeTooLong, InvalidDateRange
 from loan_system.services.application_service import (
     ApplicationInProgress,
     ApplicationNotFound,
@@ -183,6 +184,13 @@ FIXED: dict[type[Exception], tuple[int, str]] = {
     ),
     ChargeUnavailable: (
         status.HTTP_409_CONFLICT, "Cổng thanh toán tạm thời không phản hồi. Vui lòng thử lại."
+    ),
+    InvalidDateRange: (
+        status.HTTP_400_BAD_REQUEST, "Khoảng thời gian không hợp lệ: ngày kết thúc phải sau ngày bắt đầu."
+    ),
+    DateRangeTooLong: (
+        status.HTTP_400_BAD_REQUEST,
+        "Khoảng thời gian quá dài (tối đa 12 tháng). Vui lòng thu hẹp khoảng thời gian.",
     ),
 }
 # Thông điệp do tầng nghiệp vụ soạn, an toàn để hiển thị.
