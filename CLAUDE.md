@@ -17,7 +17,7 @@ Test API (`tests/api`) cần một SQL Server thật: mặc định `localhost\M
 
 ## Quy ước
 
-- Hai seam kiểm thử: REST API (`tests/api`, qua TestClient) và giao diện công khai của tầng miền (`tests/domain`). Không kiểm tra qua truy vấn thẳng CSDL; chỉ giả lập hệ thống ngoài (SMS, CIC, cổng thanh toán) và đồng hồ.
+- Hai seam kiểm thử: HTTP (REST API và trang HTML dưới `/app`, `tests/api`, qua TestClient) và giao diện công khai của tầng miền (`tests/domain`). Không kiểm tra qua truy vấn thẳng CSDL; chỉ giả lập hệ thống ngoài (SMS, CIC, cổng thanh toán) và đồng hồ.
 - Tiền là `Decimal` (đồng), làm tròn nửa lên; không dùng float.
 - Tầng nghiệp vụ tự `commit`; mọi thao tác quan trọng ghi `AuditService.log` trong cùng giao dịch.
 - Lỗi API theo mục 4.2.4 đề cương (400/401/403/404/409/429), không lộ chi tiết kỹ thuật.

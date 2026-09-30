@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field, errors with context %}
+{% block title %}Đăng ký ứng dụng xác thực{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Đăng ký ứng dụng xác thực</h1>
+  {{ errors(error) }}
+  {% if secret %}
+  <p>Thêm tài khoản vào ứng dụng xác thực (Google Authenticator, Microsoft Authenticator…) bằng khóa dưới đây, rồi nhập mã 6 số đang hiển thị.</p>
+  <p><strong>Khóa:</strong> <code class="secret">{{ secret }}</code></p>
+  <p class="muted break">{{ otpauth_uri }}</p>
+  {% endif %}
+  {% if secret or started %}
+  <form method="post" action="/app/setup/totp/confirm">
+    {{ csrf_field() }}
+    <label>Mã OTP
+      <input name="code" inputmode="numeric" pattern="\d{6}" maxlength="6" autocomplete="one-time-code" required autofocus>
+    </label>
+    <button type="submit">Kích hoạt tài khoản</button>
+  </form>
+  {% endif %}
+  <form method="post" action="/app/setup/totp">
+    {{ csrf_field() }}
+    {% if secret or started %}
+    <p class="muted">Chưa thêm được khóa vào ứng dụng? Tạo khóa mới (khóa cũ sẽ không dùng được nữa).</p>
+    <button type="submit" class="secondary">Tạo khóa mới</button>
+    {% else %}
+    <p>Mật khẩu đã được đổi. Bước tiếp theo: tạo khóa cho ứng dụng xác thực.</p>
+    <button type="submit">Tạo khóa</button>
+    {% endif %}
+  </form>
+</section>
+{% endblock %}

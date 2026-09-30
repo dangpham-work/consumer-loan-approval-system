@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field, errors with context %}
+{% block title %}Đăng ký tài khoản{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Đăng ký tài khoản khách hàng</h1>
+  {{ errors(error, field_errors or ()) }}
+  <form method="post" action="/app/register">
+    {{ csrf_field() }}
+    <label>Họ và tên
+      <input name="full_name" value="{{ form.full_name or '' }}" minlength="2" maxlength="100" autocomplete="name" required>
+    </label>
+    <label>Ngày sinh
+      <input type="date" name="date_of_birth" value="{{ form.date_of_birth or '' }}" required>
+    </label>
+    <label>Số điện thoại
+      <input name="phone" value="{{ form.phone or '' }}" inputmode="tel" pattern="0\d{9}" autocomplete="tel" required>
+    </label>
+    <label>Email
+      <input type="email" name="email" value="{{ form.email or '' }}" autocomplete="email" required>
+    </label>
+    <label>Mật khẩu (ít nhất {{ min_length }} ký tự)
+      <input type="password" name="password" minlength="{{ min_length }}" maxlength="128" autocomplete="new-password" required>
+    </label>
+    <label class="check">
+      <input type="checkbox" name="accept_terms" value="true" required> Tôi đồng ý với điều khoản sử dụng
+    </label>
+    <button type="submit">Đăng ký</button>
+  </form>
+  <p class="muted">Đã có tài khoản? <a href="/app/login">Đăng nhập</a></p>
+</section>
+{% endblock %}

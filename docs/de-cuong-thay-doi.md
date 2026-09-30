@@ -73,7 +73,7 @@ Kết quả phiên hỏi đáp rà soát đề cương `De_cuong_OOAD_Vay_tin_du
 - [ ] **`customers.employer`**: thêm cột nơi làm việc (M03 bước 2 có trường này nhưng lược đồ 4.1.2d không có).
 - [ ] **Số tiền trả hằng tháng ước tính (M03 bước 1)**: tính theo lãi suất trần 28%/năm (hạng C), vì lúc lập hồ sơ vay chưa có Hạng.
 - [ ] **Nộp hồ sơ vay**: bắt buộc đủ thông tin bước 2 (trừ nơi làm việc) và cả 4 loại giấy tờ (CCCD 2 mặt, chứng minh thu nhập, hóa đơn điện/nước). CCCD không đổi được nữa khi khách hàng đã từng nộp một hồ sơ vay.
-- [ ] **Màn hình Jinja2** (M01, M03, M09) chưa làm trong ticket #3, #4: mới có API.
+- [ ] **Màn hình Jinja2** (M03, M09) chưa làm trong ticket #3, #4: mới có API. M01 làm ở ticket #22.
 
 ## Phát sinh khi cài đặt (ticket #5)
 
@@ -203,3 +203,12 @@ Kết quả phiên hỏi đáp rà soát đề cương `De_cuong_OOAD_Vay_tin_du
 - [ ] **`GET /reports/statistics/export`** (`format=CSV|PDF`, mặc định CSV): ghi log `REPORT_EXPORT`. "Excel" cài đặt bằng CSV có BOM UTF-8 để Excel đọc đúng tiếng Việt (cùng cách làm CSV của ticket #15, không thêm phụ thuộc xlsx); PDF dùng fpdf2, chữ bỏ dấu như hợp đồng (ticket #10). Báo cáo chỉ có số liệu tổng hợp (đếm, tổng tiền, tỷ lệ), không có tên khách hàng hay mã hồ sơ vay (SR07).
 - [ ] **Không có bảng mới**: mọi chỉ tiêu tính trực tiếp từ các bảng đã có (`loan_applications`, `application_status_history`, `disbursements`, `loans`, `credit_scores`).
 - [ ] **Màn hình**: dự án chưa có tầng Jinja2, nên ticket này chỉ gồm API (như ticket #14).
+
+## Phát sinh khi cài đặt (ticket #22)
+
+- [ ] **Đường dẫn trang HTML**: mọi trang nằm dưới `/app` (đăng nhập `/app/login`, trang chủ `/app`, `/` chuyển hướng về `/app`) để không trùng đường dẫn REST API. Tầng giao diện (`loan_system/web`) gọi thẳng tầng dịch vụ và dùng chung cookie phiên với API; test qua TestClient trên các trang HTML, cùng seam với REST API.
+- [ ] **CSRF**: kiểu double-submit, cookie `csrf` ngẫu nhiên (HttpOnly, Secure, SameSite=Strict) và trường ẩn `csrf` trong mọi biểu mẫu POST; thiếu hoặc sai thì 403. Nút "Hiện" và "Tiếp tục làm việc" gọi REST API bằng `fetch`, dựa vào cookie phiên SameSite=Strict như các lời gọi API khác.
+- [ ] **Menu theo vai trò**: mỗi mục gắn một quyền (và loại tài khoản nếu cần): Nộp hồ sơ vay và Khoản vay của tôi cho Khách hàng, Hàng đợi hồ sơ vay (`APPLICATION_VIEW`) cho nhân viên, Quản trị (`USER_MANAGE`), Nhật ký kiểm toán (`AUDIT_VIEW`), Báo cáo thống kê (`REPORT_VIEW`). M06, M07, M08 mở từ hàng đợi (M05), không có mục riêng. Trang chủ tạm thời chỉ chào người dùng; M02 và M05 thay trang này ở ticket #23, #25.
+- [ ] **Đếm ngược hết phiên**: cảnh báo 2 phút trước khi hết 15 phút không hoạt động (SR11), nút "Tiếp tục làm việc" gọi `GET /auth/session` để gia hạn; hết giờ thì chuyển về màn hình đăng nhập.
+- [ ] **Trang lỗi**: 400/403/404/409/429 dưới `/app` hiện trang lỗi chung, không lộ chi tiết kỹ thuật; đường dẫn ngoài `/app` vẫn trả JSON như cũ. Chưa đăng nhập hoặc phiên hết hạn thì chuyển về `/app/login` kèm thông báo. Thông báo góc trên chọn bằng khóa cố định (`?notice=`), không hiển thị chuỗi tùy ý từ URL.
+- [ ] **UC03**: mới có đổi mật khẩu tạm khi đăng nhập lần đầu. Tầng nghiệp vụ chưa có đổi mật khẩu thường và quên mật khẩu, nên M01 chưa có hai chức năng này. Đăng ký TOTP hiện khóa dạng chữ và URI `otpauth://`, chưa có mã QR vì chưa có thư viện tạo QR.

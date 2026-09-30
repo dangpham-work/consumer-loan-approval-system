@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field, errors with context %}
+{% block title %}Xác thực số điện thoại{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Xác thực số điện thoại</h1>
+  <p>Mã OTP đã được gửi tới số điện thoại của bạn.</p>
+  {% if eligible_for_loan is false %}
+  <p class="alert alert-warn">Theo quy định, chỉ người từ {{ min_age }} đến {{ max_age }} tuổi mới nộp được hồ sơ vay. Bạn vẫn có thể tạo tài khoản.</p>
+  {% endif %}
+  {{ errors(error) }}
+  <form method="post" action="/app/register/verify">
+    {{ csrf_field() }}
+    <input type="hidden" name="registration_id" value="{{ registration_id }}">
+    <label>Mã OTP
+      <input name="otp" inputmode="numeric" pattern="\d{6}" maxlength="6" autocomplete="one-time-code" required autofocus>
+    </label>
+    <button type="submit">Xác nhận</button>
+  </form>
+</section>
+{% endblock %}

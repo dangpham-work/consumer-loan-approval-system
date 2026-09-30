@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from loan_system.adapters.cic import CicGateway, FakeCicGateway
 from loan_system.adapters.email import EmailGateway, FakeEmailGateway
@@ -19,6 +19,7 @@ from loan_system.api import (
     notifications,
     reports,
 )
+from loan_system import web
 from loan_system.api import payments as payments_api
 from loan_system.api.deps import AppContext
 from loan_system.clock import Clock, SystemClock
@@ -51,7 +52,9 @@ def create_app(
     )
 
     @app.exception_handler(RequestValidationError)
-    async def invalid_input(_: Request, exc: RequestValidationError) -> JSONResponse:
+    async def invalid_input(request: Request, exc: RequestValidationError) -> Response:
+        if web.pages.is_page(request):
+            return web.pages.error_page(request, 400)
         # Quy ước lỗi mục 4.2.4: 400, chỉ nêu trường và lý do, không lộ chi tiết kỹ thuật.
         errors = [
             {"field": ".".join(str(p) for p in err["loc"][1:]), "message": err["msg"]}
@@ -71,4 +74,5 @@ def create_app(
     app.include_router(audit.router)
     app.include_router(reports.router)
     errors.register(app)
+    web.register(app)
     return app

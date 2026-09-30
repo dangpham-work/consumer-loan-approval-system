@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field, errors with context %}
+{% block title %}Nhập mã OTP{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Xác thực hai lớp</h1>
+  <p>Nhập mã 6 số trên ứng dụng xác thực của bạn.</p>
+  {{ errors(error) }}
+  <form method="post" action="/app/login/otp">
+    {{ csrf_field() }}
+    <label>Mã OTP
+      <input name="code" inputmode="numeric" pattern="\d{6}" maxlength="6" autocomplete="one-time-code" required autofocus>
+    </label>
+    <button type="submit">Xác nhận</button>
+  </form>
+</section>
+{% endblock %}
