@@ -1,0 +1,24 @@
+{% extends "_wizard.html" %}
+{% block step %}
+<form method="post" action="{% if application %}/app/applications/{{ application.id }}/loan{% else %}/app/applications/new{% endif %}"
+      data-estimate data-ceiling-rate="{{ ceiling_rate }}">
+  {{ csrf_field() }}
+  <label>Số tiền vay (từ {{ min_amount | money }} đến {{ max_amount | money }})
+    <input type="number" name="requested_amount" value="{{ form.requested_amount }}" min="{{ min_amount }}" max="{{ max_amount }}" step="1" required>
+  </label>
+  <label>Kỳ hạn (tháng, từ {{ min_term }} đến {{ max_term }})
+    <input type="number" name="term_months" value="{{ form.term_months }}" min="{{ min_term }}" max="{{ max_term }}" required>
+  </label>
+  <label>Mục đích vay
+    <select name="purpose" required>
+      <option value="">-- Chọn --</option>
+      {% for purpose in purposes %}
+      <option value="{{ purpose }}"{% if form.purpose == purpose %} selected{% endif %}>{{ PURPOSES[purpose] }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <p>Số tiền trả hằng tháng ước tính: <strong data-estimate-output>—</strong></p>
+  <p class="muted">Ước tính theo lãi suất trần {{ (ceiling_rate * 100) | int }}%/năm. Lãi suất chính thức phụ thuộc kết quả chấm điểm tín dụng.</p>
+  <button type="submit">Lưu và tiếp tục</button>
+</form>
+{% endblock %}

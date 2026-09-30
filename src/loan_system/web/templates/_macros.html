@@ -24,3 +24,13 @@
 
 {# Thao tác không thể hoàn tác (phê duyệt, giải ngân): đặt thuộc tính `data-confirm="<câu hỏi>"`
    trên thẻ form; app.js hiện hộp thoại xác nhận trước khi gửi. #}
+
+{# Yêu cầu bổ sung hồ sơ vay (UC15) đang chờ khách hàng: lời nhắn, hạn chót và các mục cần bổ sung. #}
+{% macro need_info_notice(need_info) %}
+{% if need_info %}
+<div class="alert alert-warn">
+  <p><strong>Cần bổ sung trước {{ need_info.deadline | moment }}:</strong> {{ need_info.message }}</p>
+  <p>Mục cần bổ sung: {% for item in need_info.items %}{{ ITEMS.get(item, item) }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+</div>
+{% endif %}
+{% endmacro %}

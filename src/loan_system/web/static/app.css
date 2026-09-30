@@ -110,7 +110,40 @@ dialog { border: 1px solid var(--border); border-radius: var(--radius); padding:
 dialog::backdrop { background: rgb(0 0 0 / 35%); }
 .actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
 
+h2 { font-size: 1.1rem; margin: 0 0 0.75rem; }
+.card + .card, .card + p, .alert + .card { margin-top: 1rem; }
+.heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.heading h1 { margin: 0; }
+a.button {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  color: var(--primary-text);
+  background: var(--primary);
+  border-radius: var(--radius);
+  text-decoration: none;
+}
+
+/* Bảng dữ liệu và danh sách thông tin dạng "nhãn: giá trị". */
+.table { width: 100%; border-collapse: collapse; }
+.table th, .table td { padding: 0.5rem 0.6rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.table th { color: var(--muted); font-weight: 500; font-size: 0.9rem; }
+.row-actions a + a { margin-left: 0.75rem; }
+.summary { display: grid; grid-template-columns: max-content 1fr; gap: 0.35rem 1.25rem; margin: 0 0 1rem; }
+.summary dt { color: var(--muted); }
+.summary dd { margin: 0; }
+.timeline { margin: 0; padding-left: 1.25rem; }
+form.inline { display: flex; gap: 0.5rem; align-items: center; margin: 0; }
+form.inline input[type="file"] { margin: 0; border: 0; padding: 0; }
+
+/* Thanh bước của biểu mẫu nộp hồ sơ vay (M03). */
+.steps { display: flex; gap: 0.5rem; list-style: none; padding: 0; margin: 0 0 1rem; flex-wrap: wrap; }
+.steps li { flex: 1; min-width: 9rem; padding: 0.5rem 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.steps li[aria-current="step"] { border-color: var(--primary); color: var(--primary); font-weight: 600; }
+.steps a { text-decoration: none; }
+
 @media (max-width: 720px) {
   .layout { flex-direction: column; }
   .sidebar { width: 100%; border-right: 0; border-bottom: 1px solid var(--border); }
+  .table { display: block; overflow-x: auto; }
+  .summary { grid-template-columns: 1fr; }
 }

@@ -1,0 +1,51 @@
+{% extends "_wizard.html" %}
+{# Khi bổ sung (UC15) chỉ hiện những ô được yêu cầu: `requested` là None với bản nháp. #}
+{% macro field(values, name, label, type="text", attrs="") %}
+{% if requested is none or name in requested %}
+<label>{{ label }}
+  <input type="{{ type }}" name="{{ name }}" value="{{ values[name] }}" {{ attrs | safe }}>
+</label>
+{% endif %}
+{% endmacro %}
+{% block step %}
+{% set a = application.applicant %}
+{% set values = form or {
+  "national_id": "", "receiving_account": "",
+  "occupation": a.occupation or "", "employer": a.employer or "",
+  "employment_years": a.employment_years if a.employment_years is not none else "",
+  "monthly_income": a.monthly_income if a.monthly_income is not none else "",
+  "existing_monthly_debt": application.existing_monthly_debt if application.existing_monthly_debt is not none else "",
+  "housing_type": a.housing_type or "", "address": a.address or ""} %}
+<p class="muted">Số tiền trả hằng tháng ước tính: <strong>{{ application.estimated_monthly_payment | money }}</strong>
+  ({{ application.requested_amount | money }}, {{ application.term_months }} tháng)</p>
+<form method="post" action="/app/applications/{{ application.id }}/finance">
+  {{ csrf_field() }}
+  {% if a.national_id %}
+  {{ field(values, "national_id", "Số CCCD (đã khai " ~ a.national_id ~ "; để trống nếu không đổi)", attrs='inputmode="numeric" pattern="\d{12}" autocomplete="off"') }}
+  {% else %}
+  {{ field(values, "national_id", "Số CCCD", attrs='inputmode="numeric" pattern="\d{12}" autocomplete="off"') }}
+  {% endif %}
+  {{ field(values, "occupation", "Nghề nghiệp", attrs='minlength="2" maxlength="50"') }}
+  {{ field(values, "employer", "Nơi làm việc (không bắt buộc)", attrs='minlength="2" maxlength="100"') }}
+  {{ field(values, "employment_years", "Số năm làm việc", "number", 'min="0" max="50"') }}
+  {{ field(values, "monthly_income", "Thu nhập hằng tháng (đồng)", "number", 'min="0" step="1"') }}
+  {{ field(values, "existing_monthly_debt", "Tiền trả nợ hằng tháng hiện có (đồng)", "number", 'min="0" step="1"') }}
+  {% if requested is none or "housing_type" in requested %}
+  <label>Hình thức nhà ở
+    <select name="housing_type">
+      <option value="">-- Chọn --</option>
+      {% for code, label in HOUSING_TYPES.items() %}
+      <option value="{{ code }}"{% if values.housing_type == code %} selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  {% endif %}
+  {{ field(values, "address", "Địa chỉ", attrs='minlength="5" maxlength="255"') }}
+  {% if application.receiving_account %}
+  {{ field(values, "receiving_account", "Số tài khoản nhận tiền giải ngân (đã khai " ~ application.receiving_account ~ "; để trống nếu không đổi)", attrs='inputmode="numeric" pattern="\d{6,20}" autocomplete="off"') }}
+  {% else %}
+  {{ field(values, "receiving_account", "Số tài khoản nhận tiền giải ngân", attrs='inputmode="numeric" pattern="\d{6,20}" autocomplete="off"') }}
+  {% endif %}
+  <button type="submit">Lưu và tiếp tục</button>
+</form>
+{% endblock %}

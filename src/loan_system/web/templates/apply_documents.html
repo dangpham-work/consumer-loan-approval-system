@@ -1,0 +1,28 @@
+{% extends "_wizard.html" %}
+{% from "_macros.html" import badge %}
+{% block step %}
+<p class="muted">Ảnh JPG, PNG hoặc file PDF, tối đa {{ max_mb }}MB mỗi file. Tải lại cùng loại giấy tờ sẽ thay file cũ.</p>
+<table class="table">
+  <thead><tr><th>Giấy tờ</th><th>Trạng thái</th><th>Tải lên</th></tr></thead>
+  <tbody>
+  {% for doc_type in document_types %}
+  {% set doc = uploaded.get(doc_type) %}
+  <tr>
+    <td>{{ DOCUMENT_TYPES[doc_type] }}</td>
+    <td>{% if doc %}{{ badge("Đã tải lên " ~ (doc.uploaded_at | moment), "ok") }}{% else %}{{ badge("Còn thiếu", "warn") }}{% endif %}</td>
+    <td>
+      {% if requested is none or doc_type in requested %}
+      <form method="post" action="/app/applications/{{ application.id }}/documents" enctype="multipart/form-data" class="inline">
+        {{ csrf_field() }}
+        <input type="hidden" name="doc_type" value="{{ doc_type }}">
+        <input type="file" name="file" accept="image/jpeg,image/png,application/pdf" required>
+        <button type="submit" class="secondary">Tải lên</button>
+      </form>
+      {% else %}<span class="muted">Không cần bổ sung</span>{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p><a class="button" href="/app/applications/{{ application.id }}/confirm">Tiếp tục</a></p>
+{% endblock %}

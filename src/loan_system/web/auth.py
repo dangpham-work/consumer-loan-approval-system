@@ -38,7 +38,6 @@ from loan_system.web.pages import (
     ERROR_MESSAGES,
     PREFIX,
     Csrf,
-    PageUser,
     redirect,
     render,
     session_alive,
@@ -296,11 +295,3 @@ def verify_registration(
         return failed(status.HTTP_409_CONFLICT, DUPLICATE_MESSAGE)
     return redirect(f"{PREFIX}/login?notice=registered")
 
-
-# --- Trang chủ --------------------------------------------------------------------------------
-
-
-@router.get("", response_class=HTMLResponse)
-def home(request: Request, user: PageUser) -> HTMLResponse:
-    # M02 (khách hàng) và M05 (nhân viên) thay trang này ở các ticket sau.
-    return render(request, "home.html", user=user)

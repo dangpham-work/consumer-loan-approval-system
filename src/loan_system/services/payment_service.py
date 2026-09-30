@@ -28,6 +28,7 @@ from loan_system.clock import Clock
 from loan_system.domain.contract import ScheduleRow, ScheduleTerms, render_schedule
 from loan_system.domain.loans import (
     UNPAID_INSTALLMENT,
+    UNSETTLED,
     InstallmentStatus,
     LoanStatus,
     PaymentChannel,
@@ -114,6 +115,7 @@ class ScheduleView:
     outstanding_principal: Decimal
     amount_due: Decimal  # kể cả phí phạt, chỉ tính các kỳ đã đến hạn (UC28 bước 1)
     next_due_date: date | None
+    next_due_amount: Decimal  # số tiền còn phải trả của kỳ kế tiếp (M02)
     installments: list[InstallmentView]
 
 
@@ -168,6 +170,20 @@ class PaymentService:
         view = self._schedule_view(loan, installments)
         self._db.rollback()  # chỉ đọc: nhả khóa dòng
         return view
+
+    def own_loans(self, user: CurrentUser) -> list[ScheduleView]:
+        """M02: các Khoản vay chưa tất toán của chính khách hàng đang đăng nhập (SR04)."""
+        if user.customer_id is None:
+            return []
+        loans = self._db.scalars(
+            select(Loan)
+            .where(Loan.customer_id == user.customer_id)
+            .where(Loan.status.in_(UNSETTLED))
+            .order_by(Loan.disbursed_at)
+        ).all()
+        views = [self._schedule_view(loan, self._installments(loan.id)) for loan in loans]
+        self._db.rollback()  # chỉ đọc
+        return views
 
     def schedule_pdf(self, user: CurrentUser, loan_id: uuid.UUID) -> bytes:
         loan = self._load(user, loan_id)
@@ -510,12 +526,14 @@ class PaymentService:
         ]
         amount_due = sum((i.amount_remaining() for i in due_now), Decimal(0))
         upcoming = [i for i in installments if i.status in UNPAID_INSTALLMENT]
+        next_due = upcoming[0] if upcoming else None
         return ScheduleView(
             loan_id=loan.id, status=loan.status, debt_group=loan.debt_group,
             principal=loan.principal,
             annual_rate=loan.annual_rate, term_months=loan.term_months,
             outstanding_principal=loan.outstanding_principal, amount_due=amount_due,
-            next_due_date=upcoming[0].due_date if upcoming else None,
+            next_due_date=next_due.due_date if next_due else None,
+            next_due_amount=next_due.amount_remaining() if next_due else Decimal(0),
             installments=[
                 InstallmentView(
                     i.number, i.due_date, i.principal_due, i.interest_due, i.penalty,

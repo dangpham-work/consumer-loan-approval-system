@@ -22,6 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from loan_system.api import errors
 from loan_system.api.access import FORBIDDEN_MESSAGE, Auth, SessionToken
 from loan_system.api.deps import AppContext
 from loan_system.services.auth_service import (
@@ -30,11 +31,14 @@ from loan_system.services.auth_service import (
     NotAuthenticated,
     Stage,
 )
+from loan_system.web import labels
 
 PREFIX = "/app"
 CSRF_COOKIE = "csrf"
 _HERE = Path(__file__).parent
 TEMPLATES = Jinja2Templates(directory=_HERE / "templates")
+TEMPLATES.env.globals.update(labels.GLOBALS)
+TEMPLATES.env.filters.update(labels.FILTERS)
 
 # Cùng giọng với thông điệp của REST API (mục 4.2.4): không lộ chi tiết kỹ thuật.
 ERROR_MESSAGES = {
@@ -55,6 +59,9 @@ NOTICES = {
     "registered": "Đăng ký thành công. Bạn có thể đăng nhập.",
     "activated": "Đã kích hoạt tài khoản.",
     "otp_reset": "Nhập sai mã OTP quá số lần cho phép. Vui lòng đăng nhập lại.",
+    "submitted": "Đã nộp hồ sơ vay. Chúng tôi sẽ thông báo khi có kết quả.",
+    "cancelled": "Đã hủy hồ sơ vay.",
+    "profile_saved": "Đã lưu thông tin cá nhân.",
 }
 
 
@@ -71,6 +78,7 @@ MENU = (
     MenuItem("Trang chủ", PREFIX),
     MenuItem("Nộp hồ sơ vay", f"{PREFIX}/applications/new", "APPLICATION_CREATE", "CUSTOMER"),
     MenuItem("Khoản vay của tôi", f"{PREFIX}/loans", "PAYMENT_RECORD", "CUSTOMER"),
+    MenuItem("Thông tin cá nhân", f"{PREFIX}/profile", kind="CUSTOMER"),
     MenuItem("Hàng đợi hồ sơ vay", f"{PREFIX}/queue", "APPLICATION_VIEW", "EMPLOYEE"),
     MenuItem("Quản trị", f"{PREFIX}/admin", "USER_MANAGE"),
     MenuItem("Nhật ký kiểm toán", f"{PREFIX}/audit", "AUDIT_VIEW"),
@@ -180,11 +188,12 @@ def page_user(auth: Auth, session: SessionToken = None) -> CurrentUser:
 PageUser = Annotated[CurrentUser, Depends(page_user)]
 
 
-def require_page(permission: str) -> Callable[..., CurrentUser]:
-    """Trang chỉ dành cho người dùng có quyền `permission`; như `api.access.require`."""
+def require_page(permission: str, kind: str | None = None) -> Callable[..., CurrentUser]:
+    """Trang chỉ dành cho người dùng có quyền `permission`, và nếu có `kind` thì chỉ loại tài khoản
+    đó; như `api.access.require` và `api.applications.restricted_to`."""
 
     def check(user: PageUser, auth: Auth) -> CurrentUser:
-        if permission not in user.permissions:
+        if permission not in user.permissions or (kind is not None and user.kind != kind):
             auth.record_access_denied(user, "PERMISSION", permission)
             raise PageError(status.HTTP_403_FORBIDDEN)
         return user
@@ -205,8 +214,33 @@ def error_page(request: Request, status_code: int, message: str | None = None) -
     )
 
 
+def message_of(exc: Exception) -> str:
+    """Thông điệp của lỗi nghiệp vụ, cùng câu với REST API (`api/errors.py`)."""
+    fixed = errors.FIXED.get(type(exc))
+    return fixed[1] if fixed else str(exc)
+
+
+def _page_or_api(api_handler: Callable[..., Any], status_code: int) -> Callable[..., Any]:
+    async def handle(request: Request, exc: Exception) -> Response:
+        if is_page(request):
+            return error_page(request, status_code, message_of(exc))
+        response: Response = await api_handler(request, exc)
+        return response
+
+    return handle
+
+
 def register(app: FastAPI) -> None:
     app.mount(f"{PREFIX}/static", StaticFiles(directory=_HERE / "static"), name="static")
+
+    # Lỗi nghiệp vụ không được trang tự xử lý (ví dụ hồ sơ vay không tồn tại, ST01): trang lỗi
+    # HTML dưới /app, JSON như cũ cho REST API. Gọi sau `errors.register`.
+    handled: dict[type[Exception], int] = {
+        **{exc_type: code for exc_type, (code, _) in errors.FIXED.items()},
+        **errors.OWN_MESSAGE,
+    }
+    for exc_type, code in handled.items():
+        app.add_exception_handler(exc_type, _page_or_api(app.exception_handlers[exc_type], code))
 
     @app.exception_handler(PageError)
     async def page_error(request: Request, exc: PageError) -> HTMLResponse:

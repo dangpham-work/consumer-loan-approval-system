@@ -1,4 +1,5 @@
-// Hành vi dùng chung của mục 4.3a: đếm ngược hết phiên, hộp thoại xác nhận, nút "Hiện" dữ liệu che.
+// Hành vi dùng chung của mục 4.3a: đếm ngược hết phiên, hộp thoại xác nhận, nút "Hiện" dữ liệu che,
+// và số tiền trả hằng tháng ước tính của M03 bước 1.
 "use strict";
 
 // Đếm ngược cảnh báo hết phiên (SR11). Máy chủ gia hạn phiên ở mỗi yêu cầu, nên mỗi lần tải trang
@@ -72,8 +73,30 @@ function wireRevealButtons() {
   });
 }
 
+// M03 bước 1: niên kim theo lãi suất trần (ADR 0001), tính lại mỗi khi đổi số tiền hoặc kỳ hạn. Chỉ
+// để tham khảo; máy chủ tính lại bằng Decimal và hiển thị ở các bước sau.
+function wireEstimate() {
+  document.querySelectorAll("form[data-estimate]").forEach((form) => {
+    const output = form.querySelector("[data-estimate-output]");
+    const monthlyRate = Number(form.dataset.ceilingRate) / 12;
+    const update = () => {
+      const amount = Number(form.elements.requested_amount.value);
+      const months = Number(form.elements.term_months.value);
+      if (!(amount > 0 && months > 0)) {
+        output.textContent = "—";
+        return;
+      }
+      const payment = amount * monthlyRate / (1 - Math.pow(1 + monthlyRate, -months));
+      output.textContent = Math.round(payment).toLocaleString("vi-VN") + " đ";
+    };
+    form.addEventListener("input", update);
+    update();
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   startIdleCountdown();
   wireConfirmDialogs();
   wireRevealButtons();
+  wireEstimate();
 });

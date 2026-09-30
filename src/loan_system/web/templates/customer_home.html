@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% from "_macros.html" import badge with context %}
+{% block title %}Trang chủ{% endblock %}
+{% block content %}
+<div class="heading">
+  <h1>Xin chào, {{ user.username }}</h1>
+  {% if can_apply %}<a class="button" href="/app/applications/new">Vay mới</a>{% endif %}
+</div>
+
+{% if loans %}
+<section class="card">
+  <h2>Khoản vay</h2>
+  <table class="table">
+    <thead><tr><th>Số tiền vay</th><th>Dư nợ gốc</th><th>Trạng thái</th><th>Kỳ đến hạn tiếp theo</th><th>Số tiền kỳ đó</th><th>Cần thanh toán ngay</th></tr></thead>
+    <tbody>
+    {% for loan in loans %}
+    {% set label, tone = LOAN_STATUS.get(loan.status, (loan.status, "neutral")) %}
+    <tr>
+      <td>{{ loan.principal | money }}</td>
+      <td>{{ loan.outstanding_principal | money }}</td>
+      <td>{{ badge(label, tone) }}</td>
+      <td>{{ loan.next_due_date | day }}</td>
+      <td>{{ loan.next_due_amount | money }}</td>
+      <td>{{ loan.amount_due | money }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p><a href="/app/loans">Xem lịch trả nợ và thanh toán</a></p>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Hồ sơ vay</h2>
+  {% if applications %}
+  <table class="table">
+    <thead><tr><th>Mã hồ sơ</th><th>Số tiền</th><th>Kỳ hạn</th><th>Ngày tạo</th><th>Trạng thái</th><th></th></tr></thead>
+    <tbody>
+    {% for a in applications %}
+    {% set label, tone = APPLICATION_STATUS.get(a.status, (a.status, "neutral")) %}
+    <tr>
+      <td>{{ a.code or "(chưa nộp)" }}</td>
+      <td>{{ a.requested_amount | money }}</td>
+      <td>{{ a.term_months }} tháng</td>
+      <td>{{ a.created_at | day }}</td>
+      <td>{{ badge(label, tone) }}</td>
+      <td class="row-actions">
+        {% if a.status == "DRAFT" %}<a href="/app/applications/{{ a.id }}/finance">Tiếp tục hoàn thiện</a>
+        {% elif a.status == "NEED_INFO" %}<a href="/app/applications/{{ a.id }}/finance">Bổ sung</a>{% endif %}
+        <a href="/app/applications/{{ a.id }}">Chi tiết</a>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>Bạn chưa có hồ sơ vay nào.</p>
+  {% endif %}
+</section>
+{% endblock %}

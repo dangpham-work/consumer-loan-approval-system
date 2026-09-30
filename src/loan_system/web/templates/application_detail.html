@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% from "_macros.html" import badge, csrf_field, need_info_notice with context %}
+{% block title %}Hồ sơ vay{% endblock %}
+{% block content %}
+{% set label, tone = APPLICATION_STATUS.get(application.status, (application.status, "neutral")) %}
+<div class="heading">
+  <h1>Hồ sơ vay {{ application.code or "(chưa nộp)" }}</h1>
+  {{ badge(label, tone) }}
+</div>
+{{ need_info_notice(application.need_info) }}
+<section class="card">
+  <dl class="summary">
+    <dt>Số tiền vay</dt><dd>{{ application.requested_amount | money }}</dd>
+    <dt>Kỳ hạn</dt><dd>{{ application.term_months }} tháng</dd>
+    <dt>Mục đích</dt><dd>{{ PURPOSES.get(application.purpose, application.purpose) }}</dd>
+    <dt>Trả hằng tháng ước tính</dt><dd>{{ application.estimated_monthly_payment | money }}</dd>
+    <dt>Ngày nộp</dt><dd>{{ application.submitted_at | moment }}</dd>
+  </dl>
+  {% if editable %}
+  <p><a class="button" href="/app/applications/{{ application.id }}/finance">{% if application.need_info %}Bổ sung hồ sơ vay{% else %}Tiếp tục hoàn thiện{% endif %}</a></p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Tiến trình</h2>
+  <ol class="timeline">
+    {% for change in application.history %}
+    <li><span class="muted">{{ change.at | moment }}</span> {{ APPLICATION_STATUS.get(change.status, (change.status, ""))[0] }}</li>
+    {% endfor %}
+  </ol>
+</section>
+
+{% if cancellable %}
+<section class="card">
+  <h2>Hủy hồ sơ vay</h2>
+  <form method="post" action="/app/applications/{{ application.id }}/cancel" data-confirm="Hủy hồ sơ vay này? Thao tác không thể hoàn tác.">
+    {{ csrf_field() }}
+    <label>Lý do (không bắt buộc)
+      <input name="reason" maxlength="200">
+    </label>
+    <button type="submit" class="danger">Hủy hồ sơ vay</button>
+  </form>
+</section>
+{% endif %}
+<p><a href="/app">Về trang chủ</a></p>
+{% endblock %}

@@ -73,7 +73,7 @@ Kết quả phiên hỏi đáp rà soát đề cương `De_cuong_OOAD_Vay_tin_du
 - [ ] **`customers.employer`**: thêm cột nơi làm việc (M03 bước 2 có trường này nhưng lược đồ 4.1.2d không có).
 - [ ] **Số tiền trả hằng tháng ước tính (M03 bước 1)**: tính theo lãi suất trần 28%/năm (hạng C), vì lúc lập hồ sơ vay chưa có Hạng.
 - [ ] **Nộp hồ sơ vay**: bắt buộc đủ thông tin bước 2 (trừ nơi làm việc) và cả 4 loại giấy tờ (CCCD 2 mặt, chứng minh thu nhập, hóa đơn điện/nước). CCCD không đổi được nữa khi khách hàng đã từng nộp một hồ sơ vay.
-- [ ] **Màn hình Jinja2** (M03, M09) chưa làm trong ticket #3, #4: mới có API. M01 làm ở ticket #22.
+- [ ] **Màn hình Jinja2** (M03, M09) chưa làm trong ticket #3, #4: mới có API. M01 làm ở ticket #22, M02 và M03 ở ticket #23.
 
 ## Phát sinh khi cài đặt (ticket #5)
 
@@ -212,3 +212,14 @@ Kết quả phiên hỏi đáp rà soát đề cương `De_cuong_OOAD_Vay_tin_du
 - [ ] **Đếm ngược hết phiên**: cảnh báo 2 phút trước khi hết 15 phút không hoạt động (SR11), nút "Tiếp tục làm việc" gọi `GET /auth/session` để gia hạn; hết giờ thì chuyển về màn hình đăng nhập.
 - [ ] **Trang lỗi**: 400/403/404/409/429 dưới `/app` hiện trang lỗi chung, không lộ chi tiết kỹ thuật; đường dẫn ngoài `/app` vẫn trả JSON như cũ. Chưa đăng nhập hoặc phiên hết hạn thì chuyển về `/app/login` kèm thông báo. Thông báo góc trên chọn bằng khóa cố định (`?notice=`), không hiển thị chuỗi tùy ý từ URL.
 - [ ] **UC03**: mới có đổi mật khẩu tạm khi đăng nhập lần đầu. Tầng nghiệp vụ chưa có đổi mật khẩu thường và quên mật khẩu, nên M01 chưa có hai chức năng này. Đăng ký TOTP hiện khóa dạng chữ và URI `otpauth://`, chưa có mã QR vì chưa có thư viện tạo QR.
+
+## Phát sinh khi cài đặt (ticket #23)
+
+- [ ] **Đường dẫn M02, M03**: trang chủ khách hàng là `/app`. Biểu mẫu 4 bước dùng mỗi bước một trang: `/app/applications/new` (bước 1, tạo bản nháp), rồi `/app/applications/{id}/loan`, `/finance`, `/documents`, `/confirm`. Chi tiết và dòng thời gian trạng thái (UC16) ở `/app/applications/{id}`, nút hủy (UC17) ở đó, có hộp thoại xác nhận. Mỗi bước lưu ngay vào bản nháp, nên khách hàng có thể dừng giữa chừng rồi tiếp tục từ trang chủ.
+- [ ] **Bổ sung hồ sơ vay (UC15)**: dùng lại các bước 2 đến 4. Chỉ hiện ô nhập và nút tải lên cho những mục nhân viên tín dụng đã yêu cầu; bước 1 bị khóa vì số tiền, kỳ hạn, mục đích không thuộc danh sách được yêu cầu bổ sung.
+- [ ] **Số CCCD và số tài khoản nhận** luôn hiển thị đã che, kể cả với chính khách hàng. Ô nhập để trống nghĩa là giữ giá trị đã khai.
+- [ ] **Số tiền trả hằng tháng ước tính** ở bước 1 tính ngay trên trình duyệt (JavaScript, chỉ để tham khảo). Từ bước 2 trở đi hiển thị giá trị máy chủ tính bằng `Decimal`.
+- [ ] **Trạng thái Bị khóa** hiển thị cho khách hàng là "Đang xử lý": không để lộ việc hồ sơ vay đang bị điều tra.
+- [ ] **Kỳ đến hạn tiếp theo trên M02**: thêm `PaymentService.own_loans` (các Khoản vay chưa tất toán của khách hàng) và trường `next_due_amount` (số tiền còn phải trả của kỳ kế tiếp) trong `ScheduleView`. REST API `/loans/{id}/schedule` giữ nguyên.
+- [ ] **Cập nhật thông tin cá nhân (UC10)** ở `/app/profile`, thêm mục menu "Thông tin cá nhân". Chỉ sửa được các trường như `PATCH /customers/me`. Đổi số điện thoại hoặc email cần OTP, chưa làm trên giao diện.
+- [ ] **Lỗi nghiệp vụ trên trang HTML**: các lỗi đã ánh xạ ở `api/errors.py` (ví dụ không tìm thấy hồ sơ vay, ST01) hiện trang lỗi chung với cùng thông điệp khi xảy ra dưới `/app`. Lỗi của biểu mẫu (dữ liệu không hợp lệ, còn thiếu mục, file sai định dạng, trùng CCCD) hiện ngay trên biểu mẫu.
