@@ -19,7 +19,7 @@ from tests.api.test_credit_scoring import NATIONAL_ID, cic_report
 from tests.api.test_disbursement import approved, disburse
 from tests.api.test_nightly_job import relogin
 from tests.api.test_payment import disbursed_loan
-from tests.api.test_web_login import submit
+from tests.api.test_web_login import assert_forms_carry_csrf, submit
 from tests.api.workflow import Team, customer_browser
 from tests.conftest import FakeClock
 
@@ -72,6 +72,7 @@ def test_customer_sees_the_schedule_and_downloads_it_as_pdf(
     assert "28/10/2026" in page.text  # hạn kỳ 1
     assert page.text.count("Chưa đến hạn") >= 12
     assert f'href="/app/loans/{loan_id}/schedule.pdf"' in page.text
+    assert_forms_carry_csrf(customer, page.text)
 
     pdf = customer.get(f"/app/loans/{loan_id}/schedule.pdf")
     assert pdf.status_code == 200

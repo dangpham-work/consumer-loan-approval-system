@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import badge, csrf_field, errors %}
+{% from "_macros.html" import badge, csrf_field, errors with context %}
 {% block title %}Lịch trả nợ{% endblock %}
 {% block content %}
 {% set label, tone = LOAN_STATUS.get(loan.status, (loan.status, "neutral")) %}

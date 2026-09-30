@@ -27,6 +27,14 @@ def submit(client: TestClient, path: str, data: dict[str, str]) -> Any:
     return client.post(path, data={**data, "csrf": client.cookies["csrf"]})
 
 
+def assert_forms_carry_csrf(client: TestClient, page_text: str) -> None:
+    """Mọi biểu mẫu POST trên trang mang đúng mã CSRF của cookie. `submit` tự lấy mã từ cookie nên
+    không phát hiện được ô ẩn trống (macro `csrf_field` phải được import `with context`)."""
+    tokens = re.findall(r'name="csrf" value="([^"]*)"', page_text)
+    assert tokens, "trang không có biểu mẫu mang mã CSRF"
+    assert set(tokens) == {client.cookies["csrf"]}
+
+
 def web_login(client: TestClient, username: str = PHONE, password: str = PASSWORD) -> Any:
     return submit(client, "/app/login", {"username": username, "password": password})
 

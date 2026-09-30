@@ -25,7 +25,7 @@ from tests.api.test_disbursement import (
     trigger_disabled,
 )
 from tests.api.test_dual_approval import big_loan
-from tests.api.test_web_login import submit
+from tests.api.test_web_login import assert_forms_carry_csrf, submit
 from tests.api.workflow import Team, customer_browser
 from tests.conftest import FakeClock
 
@@ -73,6 +73,7 @@ def test_approver_opens_the_approval_screen_from_the_queue_and_approves(
     assert "25.000.000 đ" in page.text  # hạn mức đề xuất
     assert "Hạng" in page.text  # điểm tín dụng
     assert "Cần 1 – đã có 0" in page.text
+    assert_forms_carry_csrf(approver, page.text)
     assert f'action="/app/queue/{app_id}/approve"' in page.text
     assert f'action="/app/queue/{app_id}/reject"' in page.text
     assert f'action="/app/queue/{app_id}/return"' in page.text
@@ -207,6 +208,7 @@ def test_disburser_checks_integrity_disburses_with_totp_and_downloads_the_contra
     assert "30.000.000 đ" in page.text
     assert 'name="otp"' in page.text
     assert "data-confirm=" in page.text
+    assert_forms_carry_csrf(disburser.client, page.text)
 
     done = submit(disburser.client, f"/app/queue/{app_id}/disburse",
                   {"otp": otp(clock, disburser.totp_secret)})

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import badge, csrf_field, errors %}
+{% from "_macros.html" import badge, csrf_field, errors with context %}
 {% block title %}Phê duyệt hồ sơ vay {{ application.code or "" }}{% endblock %}
 {% block content %}
 {% set label, tone = STAFF_APPLICATION_STATUS.get(application.status, (application.status, "neutral")) %}
