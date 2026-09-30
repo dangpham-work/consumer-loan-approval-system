@@ -54,10 +54,12 @@ from loan_system.services.customer_service import ContactTaken, IncomeLocked
 from loan_system.services.otp_challenge_service import ChallengeFailed
 from loan_system.services.payment_service import (
     AmountExceedsDue,
+    AmountExceedsPayoff,
     ChargeFailed,
     ChargeUnavailable,
     LoanNotFound,
     LoanNotPayable,
+    QuoteExpired,
     ReceiptRequired,
     ReferenceReused,
 )
@@ -178,6 +180,11 @@ FIXED: dict[type[Exception], tuple[int, str]] = {
     ),
     AmountExceedsDue: (
         status.HTTP_400_BAD_REQUEST, "Số tiền vượt quá tổng số tiền còn phải trả"
+    ),
+    AmountExceedsPayoff: (status.HTTP_400_BAD_REQUEST, "Số tiền vượt quá số tiền tất toán"),
+    QuoteExpired: (
+        status.HTTP_409_CONFLICT,
+        "Báo giá tất toán chỉ có hiệu lực trong ngày. Vui lòng xem lại số tiền tất toán.",
     ),
     ChargeFailed: (
         status.HTTP_409_CONFLICT, "Cổng thanh toán từ chối giao dịch. Vui lòng thử lại."

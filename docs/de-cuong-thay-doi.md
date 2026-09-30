@@ -188,10 +188,18 @@ Kết quả phiên hỏi đáp rà soát đề cương `De_cuong_OOAD_Vay_tin_du
 - [ ] **BR11**: hồ sơ vay NEED_INFO quá `need_info_deadline` chuyển CANCELLED (lý do "Quá hạn bổ sung hồ sơ (BR11)", không có người thực hiện), ghi `APPLICATION_AUTO_CANCEL` và báo khách hàng (`APPLICATION_CANCELLED`).
 - [ ] **UC18 4a**: hồ sơ vay VERIFIED quá 1 giờ kể từ lần chuyển VERIFIED gần nhất được chấm lại mỗi đêm; lỗi bất ngờ ghi `SCORING_FAILED`, file mô hình sai checksum thì cảnh báo Quản trị viên lại. CIC vẫn được tra cứu trước khi kiểm tra checksum (thứ tự của SD03), nên mỗi đêm có thể có một lượt tra cứu CIC thừa cho hồ sơ vay kẹt vì mô hình.
 
+## Phát sinh khi cài đặt (ticket #14)
+
+- [ ] **UC31 bước 2**: `GET /loans/{id}/payoff-quote` (quyền `LOAN_SETTLE`) trả báo giá tại ngày hiện tại: dư nợ gốc, lãi còn nợ của các kỳ đã đến hạn, lãi phát sinh, phí phạt chưa trả, phí trả trước hạn, tổng và `quoted_on`. Kỳ đã đến hạn mà chưa trả đủ (kể cả quá hạn) phải trả đủ lãi theo lịch; lãi phát sinh (1.2.8d) chỉ tính trên gốc của các kỳ chưa đến hạn, từ ngày đến hạn gần nhất (hoặc ngày giải ngân), vì gốc quá hạn đã chịu phí phạt. Lãi đã trả trước cho kỳ chưa đến hạn (UC28 4a) được trừ vào lãi phát sinh; phần vượt quá không được hoàn.
+- [ ] **Phí trả trước hạn**: tỷ lệ lấy theo phiên bản chính sách phê duyệt hồ sơ vay đã chốt (ADR 0001), tính trên dư nợ gốc còn lại. BR10: miễn khi mọi kỳ trừ kỳ cuối đã đến hạn, hoặc không còn kỳ nào chưa đến hạn.
+- [ ] **UC31 bước 3–4**: `POST /loans/{id}/settlement` (số tiền, `quoted_on`, mã phiếu thu hoặc `idempotency_key` như UC28) thu tiền và chống ghi nhận trùng như UC28. Đủ số tiền tất toán thì kỳ đã đến hạn thành PAID, các kỳ còn lại CANCELLED, khoản vay SETTLED (3.4b T06, T07), ghi `LOAN_SETTLE` và `LOAN_STATUS_CHANGE`, gửi xác nhận tất toán (`LOAN_SETTLED`). Phí trả trước hạn là thành phần phân bổ mới `FEE` (migration 0012).
+- [ ] **UC31 2a**: `quoted_on` khác hôm nay thì 409, không thu tiền. **3a**: số tiền nhỏ hơn số tiền tất toán thì ghi nhận như thanh toán kỳ thông thường; lớn hơn thì 400. Khoản vay BAD_DEBT hoặc SETTLED thì 409, như UC28.
+- [ ] **Màn hình**: dự án chưa có tầng Jinja2 (M04), nên ticket này chỉ gồm API.
+
 ## Phát sinh khi cài đặt (ticket #18)
 
 - [ ] **UC32**: `GET /reports/statistics` (quyền `REPORT_VIEW`, đã gán cho APPROVER từ ma trận RBAC ở ticket #3, không cần migration mới) trả trọn bộ chỉ tiêu của M11 trong một lần gọi — đề cương chỉ liệt kê một bộ biểu đồ cố định cho màn hình này, không có khái niệm "loại báo cáo" khác cần chọn riêng. Tham số `from`, `to` (ngày, bắt buộc); quá 12 tháng thì 400 (UC32 2a), ngày kết thúc trước ngày bắt đầu cũng 400.
 - [ ] **Phạm vi tổng hợp**: hồ sơ vay tính theo `submitted_at` trong kỳ (số hồ sơ theo trạng thái, tỷ lệ duyệt/từ chối, thời gian xử lý trung bình từ nộp đến quyết định đầu tiên trong `application_status_history`); khoản vay (dư nợ, nhóm nợ, tỷ lệ quá hạn) tính trên các khoản giải ngân trong kỳ (`disbursed_at`), lấy `outstanding_principal`/`debt_group` hiện tại — hệ thống không lưu lịch sử dư nợ theo thời điểm nên không dựng lại được đúng số dư tại `to`.
 - [ ] **`GET /reports/statistics/export`** (`format=CSV|PDF`, mặc định CSV): ghi log `REPORT_EXPORT`. "Excel" cài đặt bằng CSV có BOM UTF-8 để Excel đọc đúng tiếng Việt (cùng cách làm CSV của ticket #15, không thêm phụ thuộc xlsx); PDF dùng fpdf2, chữ bỏ dấu như hợp đồng (ticket #10). Báo cáo chỉ có số liệu tổng hợp (đếm, tổng tiền, tỷ lệ), không có tên khách hàng hay mã hồ sơ vay (SR07).
 - [ ] **Không có bảng mới**: mọi chỉ tiêu tính trực tiếp từ các bảng đã có (`loan_applications`, `application_status_history`, `disbursements`, `loans`, `credit_scores`).
-- [ ] **Màn hình**: dự án chưa có tầng Jinja2, nên ticket này chỉ gồm API.
+- [ ] **Màn hình**: dự án chưa có tầng Jinja2, nên ticket này chỉ gồm API (như ticket #14).

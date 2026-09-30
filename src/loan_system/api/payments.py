@@ -1,4 +1,4 @@
-"""UC27 Xem lịch trả nợ, UC28 Thanh toán kỳ (màn hình M04).
+"""UC27 Xem lịch trả nợ, UC28 Thanh toán kỳ, UC31 Tất toán khoản vay (màn hình M04).
 
 Lỗi nghiệp vụ được đổi sang mã HTTP ở `api/errors.py`.
 """
@@ -20,6 +20,8 @@ router = APIRouter(prefix="/loans", tags=["Thu nợ"])
 
 # UC27, UC28: Khách hàng và NV tín dụng (quyền PAYMENT_RECORD theo ma trận RBAC).
 Payer = Annotated[CurrentUser, Depends(require("PAYMENT_RECORD"))]
+# UC31: Khách hàng và NV tín dụng (quyền LOAN_SETTLE).
+Settler = Annotated[CurrentUser, Depends(require("LOAN_SETTLE"))]
 
 
 def _payments(db: Db, ctx: Ctx, ip: ClientIp) -> PaymentService:
@@ -84,6 +86,24 @@ class PaymentResponse(BaseModel):
     outstanding_principal: Decimal
 
 
+class PayoffQuoteResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    loan_id: uuid.UUID
+    quoted_on: date
+    principal: Decimal
+    due_interest: Decimal
+    accrued_interest: Decimal
+    penalty: Decimal
+    prepayment_fee: Decimal
+    total: Decimal
+
+
+class SettleRequest(PayRequest):
+    # UC31 2a: ngày của báo giá đã hiển thị; khác hôm nay thì phải báo giá lại.
+    quoted_on: date
+
+
 @router.get("/{loan_id}/schedule", response_model=ScheduleResponse)
 def get_schedule(loan_id: uuid.UUID, user: Payer, payments: Payments) -> ScheduleResponse:
     return ScheduleResponse.model_validate(payments.schedule(user, loan_id))
@@ -103,6 +123,25 @@ def pay(loan_id: uuid.UUID, body: PayRequest, user: Payer, payments: Payments) -
     return PaymentResponse.model_validate(
         payments.pay(
             user, loan_id, body.amount, receipt_no=body.receipt_no,
+            idempotency_key=body.idempotency_key,
+        )
+    )
+
+
+@router.get("/{loan_id}/payoff-quote", response_model=PayoffQuoteResponse)
+def get_payoff_quote(
+    loan_id: uuid.UUID, user: Settler, payments: Payments
+) -> PayoffQuoteResponse:
+    return PayoffQuoteResponse.model_validate(payments.payoff_quote(user, loan_id))
+
+
+@router.post("/{loan_id}/settlement", response_model=PaymentResponse)
+def settle(
+    loan_id: uuid.UUID, body: SettleRequest, user: Settler, payments: Payments
+) -> PaymentResponse:
+    return PaymentResponse.model_validate(
+        payments.settle(
+            user, loan_id, body.amount, body.quoted_on, receipt_no=body.receipt_no,
             idempotency_key=body.idempotency_key,
         )
     )

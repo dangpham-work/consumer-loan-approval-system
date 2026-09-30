@@ -656,7 +656,8 @@ class PaymentAllocation(Base):
     __tablename__ = "payment_allocations"
     __table_args__ = (
         CheckConstraint(
-            "component IN ('PENALTY','INTEREST','PRINCIPAL')", name="ck_payment_allocations_component"
+            "component IN ('PENALTY','INTEREST','PRINCIPAL','FEE')",
+            name="ck_payment_allocations_component",
         ),
         CheckConstraint("amount > 0", name="ck_payment_allocations_amount"),
     )
