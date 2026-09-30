@@ -15,6 +15,12 @@
 {% elif actions.held_by_other %}
 <p class="alert">Hồ sơ vay đang do nhân viên khác xử lý.</p>
 {% endif %}
+{% if "LOAN_APPROVE" in user.permissions and application.status in ("PENDING_APPROVAL", "APPROVED", "REJECTED", "DISBURSED", "LOCKED") %}
+<p><a class="button" href="/app/queue/{{ application.id }}/approval">{{ "Phê duyệt hồ sơ vay" if application.status == "PENDING_APPROVAL" else "Lịch sử quyết định" }}</a></p>
+{% endif %}
+{% if "DISBURSE" in user.permissions and application.status in ("APPROVED", "DISBURSED", "LOCKED") %}
+<p><a class="button" href="/app/queue/{{ application.id }}/disbursement">{{ "Giải ngân" if application.status == "APPROVED" else "Xem giải ngân" }}</a></p>
+{% endif %}
 {% if application.status in ("DRAFT", "NEED_INFO") and application.created_by and application.created_by == user.employee_id %}
 <p><a class="button" href="/app/applications/{{ application.id }}/finance">Tiếp tục lập hồ sơ vay</a></p>
 {% endif %}
@@ -128,43 +134,7 @@
 </section>
 {% endif %}
 
-{% if score %}
-<section class="card">
-  <h2>Kết quả chấm điểm</h2>
-  <dl class="summary">
-    <dt>Điểm tín dụng</dt><dd>{% if score.score is not none %}{{ score.score }} · Hạng {{ score.grade }}{% else %}Không chấm điểm{% endif %}</dd>
-    {% if score.knock_out_reason %}<dt>Lý do loại</dt><dd>{{ score.knock_out_reason }}</dd>{% endif %}
-    <dt>DTI khi chấm điểm</dt><dd>{{ score.dti | percent }}</dd>
-    {% if score.annual_rate is not none %}<dt>Lãi suất theo hạng</dt><dd>{{ score.annual_rate | percent }}/năm</dd>{% endif %}
-    <dt>Phiên bản mô hình</dt><dd>{{ score.model_version or "" }}</dd>
-    <dt>Thời điểm chấm</dt><dd>{{ score.scored_at | moment }}</dd>
-  </dl>
-  {% if score.fraud_suspected %}<div class="alert alert-warn">Hệ thống phát hiện dấu hiệu nghi ngờ gian lận.</div>{% endif %}
-  {% if score.factors %}
-  <h3>Các yếu tố</h3>
-  <table class="table">
-    <thead><tr><th>Yếu tố</th><th>Điểm</th></tr></thead>
-    <tbody>
-    {% for f in score.factors %}
-    <tr><td>{{ f.label }}{% if f.code in score.top_factors %} {{ badge("Ảnh hưởng lớn", "warn") }}{% endif %}</td><td>{{ f.points }} / {{ f.max_points }}</td></tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  {% endif %}
-  <h3>Báo cáo CIC</h3>
-  {% if score.cic %}
-  <dl class="summary">
-    <dt>Nhóm nợ cao nhất</dt><dd>Nhóm {{ score.cic.highest_debt_group }}</dd>
-    <dt>Tổng dư nợ</dt><dd>{{ score.cic.total_outstanding | money }}</dd>
-    <dt>Số tổ chức cho vay</dt><dd>{{ score.cic.lender_count }}</dd>
-    <dt>Nghĩa vụ trả nợ hằng tháng</dt><dd>{{ score.cic.monthly_obligation | money }}</dd>
-    <dt>Thời điểm tra cứu</dt><dd>{{ score.cic.queried_at | moment }}</dd>
-  </dl>
-  {% else %}
-  <p class="muted">Thiếu dữ liệu CIC.</p>
-  {% endif %}
-</section>
-{% endif %}
+{% include "_score.html" %}
 
 {% if actions.appraise %}
 {% set p = proposal %}

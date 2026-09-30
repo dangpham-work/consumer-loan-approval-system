@@ -65,6 +65,10 @@ class NoFailedDisbursement(Exception):
     """Ticket #11: chưa có lệnh giải ngân nào bị từ chối trên hồ sơ vay này, không cần hủy để lập lại."""
 
 
+class NotDisbursed(Exception):
+    """Hồ sơ vay chưa được giải ngân nên chưa có khoản vay, hợp đồng."""
+
+
 class PaymentPending(Exception):
     """UC25 7a: cổng thanh toán lỗi tạm thời; lệnh giải ngân đang chờ, thử lại được."""
 
@@ -110,6 +114,7 @@ class DisbursementScreen:
     annual_rate: Decimal
     term_months: int
     pending: bool  # đang có lệnh giải ngân chờ thử lại
+    failed: bool  # UC25 7b: lệnh trước bị từ chối, chỉ còn hủy hồ sơ vay để lập lại
 
 
 @dataclass(frozen=True)
@@ -156,6 +161,7 @@ class DisbursementService:
             annual_rate=application.annual_rate,
             term_months=application.approved_term,
             pending=self._pending(application) is not None,
+            failed=self._has_failed(application),
         )
         self._db.rollback()  # chỉ đọc: nhả khóa dòng
         return screen
@@ -221,6 +227,22 @@ class DisbursementService:
         self._log("DISBURSE_CANCEL", user, application, None)
         self._applications.commit()
         return self._applications.view(application, user)
+
+    def completed(self, user: CurrentUser, application_id: uuid.UUID) -> DisbursementResult:
+        """M08 sau khi giải ngân: lệnh chuyển tiền thành công và khoản vay đã lập (UC26)."""
+        loan, disbursement = self._disbursed(user, application_id)
+        result = DisbursementResult(
+            disbursement.status, disbursement.transaction_ref, self._loan_view(loan)
+        )
+        self._db.rollback()  # chỉ đọc
+        return result
+
+    def contract(self, user: CurrentUser, application_id: uuid.UUID) -> bytes:
+        """Hợp đồng tín dụng PDF đã sinh lúc giải ngân (UC26 bước 5)."""
+        loan, _ = self._disbursed(user, application_id)
+        content = self._db.get_one(LoanContract, loan.id).content
+        self._db.rollback()  # chỉ đọc
+        return content
 
     # --- Nội bộ -------------------------------------------------------------------------------
 
@@ -435,6 +457,21 @@ class DisbursementService:
                 for i in installments
             ],
         )
+
+    def _disbursed(
+        self, user: CurrentUser, application_id: uuid.UUID
+    ) -> tuple[Loan, Disbursement]:
+        application = self._applications.load(user, application_id)
+        disbursement = self._db.scalars(
+            select(Disbursement)
+            .where(Disbursement.application_id == application.id)
+            .where(Disbursement.status == DisbursementStatus.SUCCESS)
+            .where(Disbursement.loan_id.is_not(None))
+        ).first()
+        if application.status != ApplicationStatus.DISBURSED or disbursement is None:
+            raise NotDisbursed
+        assert disbursement.loan_id is not None
+        return self._db.get_one(Loan, disbursement.loan_id), disbursement
 
     def _pending(self, application: LoanApplication) -> Disbursement | None:
         return self._db.scalars(

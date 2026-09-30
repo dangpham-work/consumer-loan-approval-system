@@ -1,6 +1,7 @@
 """Seam 1: UC25 Giải ngân, UC26 Sinh hợp đồng và lịch trả nợ, SUC02 Kiểm tra toàn vẹn, M08 (ticket
 #10); xử lý hồ sơ vay LOCKED và giải ngân FAILED (ticket #11)."""
 
+import hashlib
 from collections.abc import Iterator
 from contextlib import contextmanager
 from decimal import Decimal
@@ -81,6 +82,10 @@ def test_tc01_grade_b_loan_approved_by_one_manager_is_disbursed_with_its_schedul
     )
     assert {i["status"] for i in installments} == {"UPCOMING"}
     assert len(loan["contract_sha256"]) == 64
+    contract = disburser.get(f"/applications/{app_id}/contract")
+    assert contract.status_code == 200
+    assert contract.headers["content-type"] == "application/pdf"
+    assert hashlib.sha256(contract.content).hexdigest() == loan["contract_sha256"]
     assert status_of(customer, app_id) == "DISBURSED"
     # Cổng thanh toán chuyển đúng một lần, đúng số tiền, đúng tài khoản nhận.
     [transfer] = payments.transfers
@@ -197,6 +202,7 @@ def test_only_approved_applications_can_be_disbursed(
     team: Team, customer: TestClient, clock: FakeClock
 ) -> None:
     app_id = pending_approval(team, customer)
+    assert team.disburser.client.get(f"/applications/{app_id}/contract").status_code == 409
 
     assert disburse(team, clock, app_id).status_code == 409
     assert team.disburser.client.get(f"/applications/{app_id}/disbursement").status_code == 409
@@ -236,6 +242,8 @@ def test_gateway_refusal_fails_the_disbursement(
     assert "từ chối lệnh giải ngân" in response.json()["detail"]
     assert payments.transfers == []
     assert status_of(customer, app_id) == "APPROVED"
+    screen = team.disburser.client.get(f"/applications/{app_id}/disbursement").json()
+    assert (screen["failed"], screen["pending"]) == (True, False)
     # Tài khoản nhận không đổi được (BR07): không lập lệnh mới tới cùng tài khoản đó.
     again = disburse(team, clock, app_id)
     assert again.status_code == 409

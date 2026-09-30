@@ -44,6 +44,7 @@ from loan_system.services.disbursement_service import (
     IntegrityFailure,
     NoFailedDisbursement,
     NotApproved,
+    NotDisbursed,
     PaymentPending,
     PreviouslyFailed,
     TransferRejected,
@@ -141,6 +142,7 @@ FIXED: dict[type[Exception], tuple[int, str]] = {
         status.HTTP_409_CONFLICT,
         "Không kiểm tra được toàn vẹn hồ sơ vay. Vui lòng báo quản trị viên.",
     ),
+    NotDisbursed: (status.HTTP_409_CONFLICT, "Hồ sơ vay chưa được giải ngân"),
     PreviouslyFailed: (
         status.HTTP_409_CONFLICT,
         "Lệnh giải ngân trước đã bị cổng thanh toán từ chối. Cần hủy hồ sơ vay để lập lại.",

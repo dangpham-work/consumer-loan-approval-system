@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% from "_macros.html" import badge, csrf_field, errors %}
+{% block title %}Phê duyệt hồ sơ vay {{ application.code or "" }}{% endblock %}
+{% block content %}
+{% set label, tone = STAFF_APPLICATION_STATUS.get(application.status, (application.status, "neutral")) %}
+<div class="heading">
+  <h1>Phê duyệt hồ sơ vay {{ application.code }}</h1>
+  {{ badge(label, tone) }}
+</div>
+{{ errors(error, field_errors or ()) }}
+{% if stale %}
+<p class="alert alert-warn"><a href="/app/queue/{{ application.id }}/approval">Tải lại trang</a> để xem các quyết định mới nhất trước khi quyết định.</p>
+{% endif %}
+
+<section class="card">
+  <h2>Tóm tắt tờ trình</h2>
+  <dl class="summary">
+    <dt>Khách hàng</dt><dd>{{ application.applicant.full_name }}</dd>
+    <dt>Số tiền đề nghị</dt><dd>{{ application.requested_amount | money }} · {{ application.term_months }} tháng</dd>
+    <dt>Mục đích</dt><dd>{{ PURPOSES.get(application.purpose, application.purpose) }}</dd>
+    <dt>Đề xuất</dt><dd>{{ RECOMMENDATIONS.get(report.recommendation, report.recommendation) }}</dd>
+    {% if report.proposed_amount is not none %}<dt>Hạn mức đề xuất</dt><dd>{{ report.proposed_amount | money }}</dd>{% endif %}
+    {% if report.proposed_term is not none %}<dt>Kỳ hạn đề xuất</dt><dd>{{ report.proposed_term }} tháng</dd>{% endif %}
+    {% if approval.annual_rate is not none %}<dt>Lãi suất</dt><dd>{{ approval.annual_rate | percent }}/năm</dd>{% endif %}
+    {% if report.dti is not none %}<dt>DTI</dt><dd>{{ report.dti | percent }}</dd>{% endif %}
+    <dt>Nghi ngờ gian lận</dt><dd>{{ "Có" if report.fraud_suspected else "Không" }}</dd>
+    <dt>Nhận xét thẩm định</dt><dd>{{ report.comment }}</dd>
+    <dt>Lập lúc</dt><dd>{{ report.created_at | moment }}</dd>
+  </dl>
+  {% if report.fraud_suspected %}<div class="alert alert-warn">Chuyên viên thẩm định nghi ngờ gian lận.</div>{% endif %}
+</section>
+
+{% include "_score.html" %}
+
+<section class="card">
+  <h2>Quyết định</h2>
+  {% if approval.required_approvals %}
+  <p><strong>Cần {{ approval.required_approvals }} – đã có {{ approval.approvals }}</strong> lượt phê duyệt trên tờ trình này.</p>
+  {% endif %}
+  {% if approval.approved_amount is not none %}
+  <p>Đã chốt hạn mức {{ approval.approved_amount | money }}, kỳ hạn {{ approval.approved_term }} tháng.</p>
+  {% endif %}
+  {% if approval.decisions %}
+  <table class="table">
+    <thead><tr><th>Thời điểm</th><th>Quản lý phê duyệt</th><th>Quyết định</th><th>Lý do, ý kiến</th></tr></thead>
+    <tbody>
+    {% for d in approval.decisions %}
+    {% set dl, dt = DECISIONS.get(d.decision, (d.decision, "neutral")) %}
+    <tr{% if d.superseded %} class="muted"{% endif %}>
+      <td>{{ d.decided_at | moment }}</td>
+      <td>{{ d.approver }}</td>
+      <td>{{ badge(dl, dt) }}{% if d.superseded %} <span class="muted">(tờ trình cũ)</span>{% endif %}</td>
+      <td>{% if d.reason_group %}{{ REJECTION_REASONS.get(d.reason_group, d.reason_group) }}: {% endif %}{{ d.comment or "" }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">Chưa có quyết định nào.</p>
+  {% endif %}
+</section>
+
+{% if approval.can_decide and not stale %}
+{% set f = form %}
+{% if report.recommendation == "APPROVE" %}
+<section class="card">
+  <h2>Phê duyệt</h2>
+  <form method="post" action="/app/queue/{{ application.id }}/approve" data-confirm="Phê duyệt hồ sơ vay {{ application.code }} với hạn mức {{ report.proposed_amount | money }}, {{ report.proposed_term }} tháng?">
+    {{ csrf_field() }}
+    <input type="hidden" name="version" value="{{ approval.version }}">
+    <label>Ý kiến (không bắt buộc)
+      <textarea name="comment" maxlength="1000">{{ f.comment or "" }}</textarea>
+    </label>
+    <button type="submit">Duyệt</button>
+  </form>
+</section>
+{% endif %}
+<section class="card">
+  <h2>Từ chối</h2>
+  <form method="post" action="/app/queue/{{ application.id }}/reject">
+    {{ csrf_field() }}
+    <input type="hidden" name="version" value="{{ approval.version }}">
+    <label>Nhóm lý do (khách hàng chỉ được báo nhóm lý do)
+      <select name="reason_group" required>
+        <option value="">-- Chọn --</option>
+        {% for r in reasons %}<option value="{{ r }}"{% if f.reason_group == r %} selected{% endif %}>{{ REJECTION_REASONS[r] }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Mô tả (ít nhất 10 ký tự)
+      <textarea name="description" minlength="10" maxlength="1000" required>{{ f.description or "" }}</textarea>
+    </label>
+    <button type="submit" class="danger">Từ chối</button>
+  </form>
+</section>
+<section class="card">
+  <h2>Trả về thẩm định</h2>
+  <form method="post" action="/app/queue/{{ application.id }}/return">
+    {{ csrf_field() }}
+    <input type="hidden" name="version" value="{{ approval.version }}">
+    <label>Nội dung cần làm rõ (ít nhất 10 ký tự)
+      <textarea name="clarification" minlength="10" maxlength="1000" required>{{ f.clarification or "" }}</textarea>
+    </label>
+    <button type="submit" class="secondary">Trả về</button>
+  </form>
+</section>
+{% elif application.status == "PENDING_APPROVAL" and not stale %}
+<p class="alert alert-warn">Bạn đã quyết định trên tờ trình này hoặc đã tham gia một bước khác của hồ sơ vay nên không được quyết định tiếp (nguyên tắc phân tách nhiệm vụ, BR06).</p>
+{% endif %}
+<p><a href="/app/queue/{{ application.id }}">Về chi tiết hồ sơ vay</a> · <a href="/app/queue">Về hàng đợi</a></p>
+{% endblock %}

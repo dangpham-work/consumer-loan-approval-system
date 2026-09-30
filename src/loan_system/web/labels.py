@@ -4,6 +4,7 @@
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
+from loan_system.domain.approval import RejectionReason
 from loan_system.domain.text import vnd
 
 # Giờ Việt Nam (UTC+7, không đổi giờ theo mùa); CSDL và đồng hồ hệ thống dùng UTC.
@@ -73,6 +74,20 @@ VERDICTS = {"PASS": ("Đạt", "ok"), "FAIL": ("Không đạt", "danger")}
 
 RECOMMENDATIONS = {"APPROVE": "Đề xuất duyệt", "REJECT": "Đề xuất từ chối"}
 
+# Quyết định của Quản lý phê duyệt (M07) và nhóm lý do từ chối (UC24 bước 2).
+DECISIONS = {"APPROVE": ("Phê duyệt", "ok"), "REJECT": ("Từ chối", "danger"),
+             "RETURN": ("Trả về", "warn")}
+REJECTION_REASONS = {r.value: r.label[:1].upper() + r.label[1:] for r in RejectionReason}
+
+INSTALLMENT_STATUS = {
+    "UPCOMING": ("Chưa đến hạn", "neutral"),
+    "DUE": ("Đến hạn", "warn"),
+    "PARTIAL": ("Trả một phần", "warn"),
+    "PAID": ("Đã trả", "ok"),
+    "OVERDUE": ("Quá hạn", "danger"),
+    "CANCELLED": ("Đã hủy", "neutral"),
+}
+
 
 def money(amount: Decimal | int | None) -> str:
     return "" if amount is None else f"{vnd(Decimal(amount))} đ"
@@ -106,5 +121,8 @@ GLOBALS = {
     "ITEMS": ITEMS,
     "VERDICTS": VERDICTS,
     "RECOMMENDATIONS": RECOMMENDATIONS,
+    "DECISIONS": DECISIONS,
+    "REJECTION_REASONS": REJECTION_REASONS,
+    "INSTALLMENT_STATUS": INSTALLMENT_STATUS,
 }
 FILTERS = {"money": money, "day": day, "moment": moment, "percent": percent}
