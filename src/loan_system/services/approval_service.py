@@ -15,6 +15,7 @@ from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from loan_system.adapters.sms import SmsGateway
 from loan_system.clock import Clock
@@ -36,7 +37,11 @@ from loan_system.repositories.models import (
     Employee,
     LoanApplication,
 )
-from loan_system.services.application_service import ApplicationService, ApplicationView
+from loan_system.services.application_service import (
+    ApplicationService,
+    ApplicationView,
+    ConcurrentModification,
+)
 from loan_system.services.appraisal_service import ReportView, latest_report, report_view
 from loan_system.services.audit_service import AuditService
 from loan_system.services.integrity_service import IntegrityService
@@ -89,6 +94,7 @@ class ApprovalView:
     approved_term: int | None
     decisions: list[DecisionView]
     can_decide: bool  # M07 ẩn nút quyết định; việc chặn thực sự nằm ở máy chủ
+    version: int  # khóa lạc quan: Quản lý gửi lại khi quyết định (UC23 6b)
 
 
 class ApprovalService:
@@ -115,20 +121,20 @@ class ApprovalService:
         return view
 
     def approve(
-        self, user: CurrentUser, application_id: uuid.UUID, comment: str | None
+        self, user: CurrentUser, application_id: uuid.UUID, version: int, comment: str | None
     ) -> ApprovalView:
-        return self._decide(user, application_id, Decision.APPROVE, None, comment)
+        return self._decide(user, application_id, version, Decision.APPROVE, None, comment)
 
     def reject(
-        self, user: CurrentUser, application_id: uuid.UUID, reason: RejectionReason,
-        description: str,
+        self, user: CurrentUser, application_id: uuid.UUID, version: int,
+        reason: RejectionReason, description: str,
     ) -> ApprovalView:
-        return self._decide(user, application_id, Decision.REJECT, reason, description)
+        return self._decide(user, application_id, version, Decision.REJECT, reason, description)
 
     def return_to_appraisal(
-        self, user: CurrentUser, application_id: uuid.UUID, clarification: str
+        self, user: CurrentUser, application_id: uuid.UUID, version: int, clarification: str
     ) -> ApprovalView:
-        return self._decide(user, application_id, Decision.RETURN, None, clarification)
+        return self._decide(user, application_id, version, Decision.RETURN, None, clarification)
 
     # --- Nội bộ -------------------------------------------------------------------------------
 
@@ -136,20 +142,27 @@ class ApprovalService:
         self,
         user: CurrentUser,
         application_id: uuid.UUID,
+        version: int,
         decision: Decision,
         reason: RejectionReason | None,
         comment: str | None,
     ) -> ApprovalView:
         """SD05: kiểm tra SoD, lưu quyết định, gộp theo AD04 rồi chuyển trạng thái."""
-        # Khóa dòng: hai Quản lý quyết định đồng thời trên cùng hồ sơ vay thì chạy tuần tự (6b).
+        # Khóa dòng: hai Quản lý quyết định đồng thời trên cùng hồ sơ vay thì chạy tuần tự.
         application = self._applications.load(user, application_id, lock=True)
         if application.status != ApplicationStatus.PENDING_APPROVAL:
             raise NotAwaitingApproval
         report = latest_report(self._db, application.id)
         assert report is not None  # Chờ phê duyệt chỉ sau khi nộp tờ trình
         decided = self._decisions_on(report)
+        participants = self._participants(application, decided)
         # SUC01 (UC23 bước 2): người đã quyết định trên tờ trình này cũng không được quyết định lại.
-        self._sod.enforce(user, application, decision, self._participants(application, decided))
+        # Kiểm tra trước phiên bản, để vi phạm luôn được ghi nhận dù màn hình đã cũ.
+        self._sod.enforce(user, application, decision, participants)
+        if application.version != version:
+            # UC23 6b (khóa lạc quan): hồ sơ vay đã đổi từ khi Quản lý mở M07, ví dụ Quản lý kia
+            # vừa quyết định; phải tải lại để thấy lịch sử quyết định mới rồi mới quyết định.
+            raise ConcurrentModification
         if decision == Decision.APPROVE and report.recommendation != Recommendation.APPROVE:
             raise ReportNotApprovable
         assert user.employee_id is not None and application.required_approvals is not None
@@ -177,7 +190,8 @@ class ApprovalService:
             decided_at=self._clock.now(),
         )
         self._db.add(record)
-        self._apply(user, application, report, record, outcome, reason)
+        self._bump_version(application)
+        self._apply(user, application, report, record, outcome, reason, participants)
         self._audit.log(
             AUDIT_ACTIONS[decision], actor_id=user.user_id, target_type="LOAN_APPLICATION",
             target_id=application.id, ip_address=self._ip,
@@ -195,6 +209,7 @@ class ApprovalService:
         record: ApprovalDecision,
         outcome: Outcome,
         reason: RejectionReason | None,
+        participants: list[uuid.UUID | None],
     ) -> None:
         customer = self._db.get_one(Customer, application.customer_id)
         if outcome == Outcome.APPROVED:
@@ -224,11 +239,12 @@ class ApprovalService:
                     f"Hồ sơ vay {application.code} được trả về để làm rõ: {record.comment}",
                 )
         else:
-            # UC23 6a: chưa đủ số lượt, báo các Quản lý phê duyệt khác.
+            # UC23 6a: chưa đủ số lượt, báo các Quản lý phê duyệt còn được quyết định (SUC01).
             self._notifications.notify_role(
                 APPROVER,
                 "APPROVAL_NEEDED",
                 f"Hồ sơ vay {application.code} đã có một phê duyệt, cần thêm Quản lý phê duyệt.",
+                except_employees=[*participants, user.employee_id],
             )
 
     def _approve(
@@ -253,6 +269,13 @@ class ApprovalService:
             "APPLICATION_APPROVED",
             f"Hồ sơ vay {application.code} đã được phê duyệt, chờ giải ngân.",
         )
+
+    @staticmethod
+    def _bump_version(application: LoanApplication) -> None:
+        """Mọi quyết định đều tăng phiên bản hồ sơ vay, kể cả khi trạng thái chưa đổi (UC23 6a),
+        để màn hình M07 mà Quản lý kia đang mở trở thành cũ. Cột phiên bản do SQLAlchemy quản lý
+        (`version_id_col`) chỉ tăng khi dòng có thay đổi, nên đánh dấu trạng thái là đã sửa."""
+        flag_modified(application, "status")
 
     def _decisions_on(self, report: AppraisalReport) -> Sequence[ApprovalDecision]:
         return self._db.scalars(
@@ -309,4 +332,5 @@ class ApprovalService:
                 for d, name in rows
             ],
             can_decide=can_decide,
+            version=application.version,
         )

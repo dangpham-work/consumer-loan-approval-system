@@ -129,6 +129,15 @@ Kết quả phiên hỏi đáp rà soát đề cương `De_cuong_OOAD_Vay_tin_du
 - [ ] **Thông báo**: duyệt thì báo khách hàng (SMS và trong ứng dụng, nêu hạn mức, kỳ hạn) và mọi NV giải ngân; từ chối thì báo khách hàng chỉ nhóm lý do (không kèm mô tả); trả về thì báo người thẩm định kèm nội dung cần làm rõ; chưa đủ số lượt thì báo các Quản lý phê duyệt (UC23 6a).
 - [ ] **Quy tắc gộp AD04** đã có ở tầng miền; test phê duyệt kép (TC02) và khóa lạc quan trả 409 làm ở ticket #9. Kiểm tra snapshot trước giải ngân (SUC02) làm ở ticket #10.
 
+## Phát sinh khi cài đặt (ticket #9)
+
+- [ ] **UC23 6b (khóa lạc quan)**: `GET /applications/{id}/approval` trả thêm `version` (cột `loan_applications.version`); `POST .../approve`, `.../reject`, `.../return` bắt buộc gửi lại `version` đó (thiếu thì 400). Hồ sơ vay không còn "Chờ phê duyệt" thì vẫn 409 như trước; còn chờ nhưng phiên bản khác thì 409 "Hồ sơ vay vừa được cập nhật, vui lòng tải lại" và không ghi quyết định nào.
+- [ ] **Mọi quyết định đều tăng `version`**, kể cả phê duyệt đầu tiên của khoản trên 50 triệu, khi hồ sơ vay vẫn "Chờ phê duyệt" (6a). Nhờ vậy Quản lý thứ hai đang mở M07 cũ phải tải lại để thấy quyết định vừa có rồi mới quyết định. Hai người vẫn quyết định độc lập, không phân biệt thứ tự (AD04), nhưng luôn trên lịch sử quyết định mới nhất. Khóa dòng (UPDLOCK) có từ ticket #8 vẫn giữ: hai yêu cầu cùng phiên bản đến đồng thời thì yêu cầu sau chờ, đọc lại dòng đã đổi phiên bản và nhận 409.
+- [ ] **Tổ hợp quyết định cho khoản cần hai phê duyệt**: Phê duyệt + Phê duyệt thì duyệt (snapshot chỉ ký trên quyết định thứ hai); Phê duyệt + Từ chối thì từ chối; Phê duyệt + Trả về thì về thẩm định; Từ chối hoặc Trả về ngay từ đầu thì kết thúc luôn, người thứ hai nhận 409. Trả về làm vô hiệu phê duyệt trước; tờ trình mới lại cần đủ hai phê duyệt, kể cả của người đã quyết định trên tờ trình cũ. Một Quản lý không phê duyệt hai lần (403, SUC01).
+- [ ] **SUC01 được kiểm tra trước phiên bản**: người vi phạm phân tách nhiệm vụ gửi phiên bản cũ vẫn nhận 403 và bị ghi `SOD_VIOLATION`, không lẩn vào 409.
+- [ ] **UC23 6a**: "thông báo quản lý thứ hai" gửi cho mọi Quản lý phê duyệt còn được quyết định trên tờ trình hiện hành, trừ người vừa phê duyệt và những người bị SUC01 chặn (Người tạo, Người tiếp nhận, người thẩm định). Không có khái niệm "quản lý thứ hai được chỉ định" trong đề cương.
+- [ ] **Chưa làm UC23 3a (vượt thẩm quyền)**: chỉ có một vai trò phê duyệt (ghi ở ticket #7), nên mọi Quản lý phê duyệt đều đủ thẩm quyền với mọi hạn mức.
+
 ## Phát sinh khi cài đặt (ticket #16)
 
 - [ ] **Màn hình M09** mở rộng có API: `GET /admin/roles`, `GET /admin/permissions` (bảng quyền hiện có), `POST /admin/roles` (tạo vai trò kèm tập quyền ban đầu), `PUT /admin/roles/{code}/permissions` (đổi tập quyền), `GET /admin/policies`, `POST /admin/policies` (lưu phiên bản chính sách mới). Cả bốn thao tác ghi đều yêu cầu step-up OTP (UC02) như UC04.

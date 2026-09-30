@@ -35,16 +35,21 @@ def _approvals(db: Db, ctx: Ctx, ip: ClientIp) -> ApprovalService:
 Approvals = Annotated[ApprovalService, Depends(_approvals)]
 
 
-class ApproveRequest(BaseModel):
+class DecisionRequest(BaseModel):
+    # UC23 6b: phiên bản hồ sơ vay mà Quản lý đã xem trên M07 (khóa lạc quan).
+    version: int
+
+
+class ApproveRequest(DecisionRequest):
     comment: str | None = Field(default=None, max_length=1000)
 
 
-class RejectRequest(BaseModel):
+class RejectRequest(DecisionRequest):
     reason_group: RejectionReason
     description: Reason
 
 
-class ReturnRequest(BaseModel):
+class ReturnRequest(DecisionRequest):
     clarification: Reason
 
 
@@ -72,6 +77,7 @@ class ApprovalResponse(BaseModel):
     approved_term: int | None
     decisions: list[DecisionResponse]
     can_decide: bool
+    version: int
 
 
 def respond_approval(view: ApprovalView) -> ApprovalResponse:
@@ -86,6 +92,7 @@ def respond_approval(view: ApprovalView) -> ApprovalResponse:
         approved_term=view.approved_term,
         decisions=[DecisionResponse.model_validate(d) for d in view.decisions],
         can_decide=view.can_decide,
+        version=view.version,
     )
 
 
@@ -100,7 +107,7 @@ def get_approval(
 def approve(
     application_id: uuid.UUID, body: ApproveRequest, user: Approver, approvals: Approvals
 ) -> ApprovalResponse:
-    return respond_approval(approvals.approve(user, application_id, body.comment))
+    return respond_approval(approvals.approve(user, application_id, body.version, body.comment))
 
 
 @router.post("/{application_id}/reject", response_model=ApprovalResponse)
@@ -108,7 +115,9 @@ def reject(
     application_id: uuid.UUID, body: RejectRequest, user: Rejecter, approvals: Approvals
 ) -> ApprovalResponse:
     return respond_approval(
-        approvals.reject(user, application_id, body.reason_group, body.description)
+        approvals.reject(
+            user, application_id, body.version, body.reason_group, body.description
+        )
     )
 
 
@@ -116,4 +125,6 @@ def reject(
 def return_to_appraisal(
     application_id: uuid.UUID, body: ReturnRequest, user: Rejecter, approvals: Approvals
 ) -> ApprovalResponse:
-    return respond_approval(approvals.return_to_appraisal(user, application_id, body.clarification))
+    return respond_approval(
+        approvals.return_to_appraisal(user, application_id, body.version, body.clarification)
+    )
