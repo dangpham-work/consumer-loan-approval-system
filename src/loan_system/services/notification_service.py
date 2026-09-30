@@ -11,10 +11,11 @@ from sqlalchemy.orm import Session
 
 from loan_system.adapters.sms import SmsGateway
 from loan_system.clock import Clock
-from loan_system.domain.access import AccountStatus
+from loan_system.domain.access import CREDIT_OFFICER, AccountStatus
 from loan_system.repositories.models import Notification, Role, User, UserRole
 
 MAX_LISTED = 50
+SMS_ATTEMPTS = 3  # UC30 3a: gửi thất bại thì thử lại 2 lần
 
 
 class NotificationService:
@@ -59,6 +60,16 @@ class NotificationService:
         if user_id is not None:
             self.notify(user_id, type_, content)
 
+    def notify_credit_officer(
+        self, received_by: uuid.UUID | None, *, employee_type: str, role_type: str, content: str
+    ) -> None:
+        """Báo đúng NV tín dụng đã tiếp nhận hồ sơ vay, hoặc mọi NV tín dụng nếu chưa ai tiếp nhận
+        (UC15 bước 5, ticket #11)."""
+        if received_by is not None:
+            self.notify_employee(received_by, employee_type, content)
+        else:
+            self.notify_role(CREDIT_OFFICER, role_type, content)
+
     def notify_customer(self, customer_id: uuid.UUID, type_: str, content: str, phone: str) -> None:
         """Khách vãng lai chưa có tài khoản đăng nhập được vẫn nhận SMS."""
         user_id = self._db.scalars(select(User.id).where(User.customer_id == customer_id)).first()
@@ -66,11 +77,21 @@ class NotificationService:
             self.notify(user_id, type_, content)
         self._outbox.append((phone, content))
 
-    def deliver(self) -> None:
-        """Gửi các SMS đã xếp hàng; gọi sau khi giao dịch đã commit."""
+    def deliver(self) -> int:
+        """Gửi các SMS đã xếp hàng; gọi sau khi giao dịch đã commit. Mỗi tin thử lại 2 lần (UC30
+        3a); tin vẫn lỗi thì bỏ qua để các tin sau vẫn được gửi. Trả về số tin gửi thất bại để
+        người gọi ghi nhận (thông báo trong ứng dụng đã được lưu cùng giao dịch)."""
+        failed = 0
         for phone, content in self._outbox:
-            self._sms.send(phone, content)
+            for attempt in range(SMS_ATTEMPTS):
+                try:
+                    self._sms.send(phone, content)
+                    break
+                except Exception:
+                    if attempt == SMS_ATTEMPTS - 1:
+                        failed += 1
         self._outbox.clear()
+        return failed
 
     def list_for(self, user_id: uuid.UUID) -> list[Notification]:
         return list(

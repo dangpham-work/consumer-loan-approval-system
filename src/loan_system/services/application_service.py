@@ -33,7 +33,6 @@ from loan_system.domain.applications import (
     missing_for_submission,
     outside_request,
 )
-from loan_system.domain.access import CREDIT_OFFICER
 from loan_system.domain.calculations import annuity_payment
 from loan_system.domain.documents import check_document
 from loan_system.domain.loans import UNSETTLED
@@ -68,6 +67,10 @@ class ApplicationInProgress(Exception):
 
 class NotEditable(Exception):
     """Hồ sơ vay không ở trạng thái cho phép thao tác này."""
+
+
+class NotLocked(Exception):
+    """Hồ sơ vay không ở trạng thái Bị khóa."""
 
 
 class NeedInfoExpired(Exception):
@@ -391,12 +394,12 @@ class ApplicationService:
             "vừa được nộp, đang chờ tiếp nhận." if first_time else "đã được bổ sung, cần kiểm tra lại."
         )
         # Hồ sơ vay gửi lại sau khi bổ sung trở về đúng NV đã tiếp nhận (UC15 bước 5).
-        if application.received_by is not None:
-            self._notifications.notify_employee(
-                application.received_by, "APPLICATION_RESUBMITTED", message
-            )
-        else:
-            self._notifications.notify_role(CREDIT_OFFICER, "APPLICATION_SUBMITTED", message)
+        self._notifications.notify_credit_officer(
+            application.received_by,
+            employee_type="APPLICATION_RESUBMITTED",
+            role_type="APPLICATION_SUBMITTED",
+            content=message,
+        )
         self.commit()
         return self.view(application, user)
 
@@ -411,6 +414,25 @@ class ApplicationService:
         application.cancel_reason = reason
         self.transition(application, ApplicationStatus.CANCELLED, user.user_id, reason)
         self.log("APPLICATION_CANCEL", user, application.id)
+        self.commit()
+        return self.view(application, user)
+
+    # --- Ticket #11: Kiểm soát viên hủy hồ sơ vay bị khóa sau điều tra -------------------------
+
+    def resolve_lock(
+        self, user: CurrentUser, application_id: uuid.UUID, reason: str
+    ) -> ApplicationView:
+        """CONTEXT.md (Kiểm soát viên): ngoại lệ có chủ đích duy nhất, sau khi điều tra xong.
+
+        Hồ sơ vay bị khóa không bao giờ được giải ngân (CONTEXT.md); lối ra duy nhất là hủy, bắt
+        buộc lý do (`APPLICATION_LOCK_RESOLVE`, docs/de-cuong-thay-doi.md 3.4a).
+        """
+        application = self.load(user, application_id, lock=True)
+        if application.status != ApplicationStatus.LOCKED:
+            raise NotLocked
+        application.cancel_reason = reason
+        self.transition(application, ApplicationStatus.CANCELLED, user.user_id, reason)
+        self.log("APPLICATION_LOCK_RESOLVE", user, application.id)
         self.commit()
         return self.view(application, user)
 

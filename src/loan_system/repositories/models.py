@@ -578,8 +578,13 @@ class Installment(Base):
     principal_due: Mapped[Decimal] = mapped_column(Money())
     interest_due: Mapped[Decimal] = mapped_column(Money())
     penalty: Mapped[Decimal] = mapped_column(Money(), default=Decimal(0))
+    penalty_paid: Mapped[Decimal] = mapped_column(Money(), default=Decimal(0))  # phần paid_amount
     paid_amount: Mapped[Decimal] = mapped_column(Money(), default=Decimal(0))
     status: Mapped[str] = mapped_column(String(10))
+
+    def amount_remaining(self) -> Decimal:
+        """Số tiền còn phải trả của kỳ, gồm cả phí phạt."""
+        return self.penalty + self.interest_due + self.principal_due - self.paid_amount
 
 
 class LoanContract(Base):
@@ -622,3 +627,55 @@ class Disbursement(Base):
     performed_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("employees.id"))  # SoD
     created_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
     completed_at: Mapped[datetime | None] = mapped_column(DATETIMEOFFSET)
+
+
+class Payment(Base):
+    """Một khoản thanh toán kỳ, trực tuyến hoặc tại quầy (UC28)."""
+
+    __tablename__ = "payments"
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="ck_payments_amount"),
+        CheckConstraint("channel IN ('ONLINE','COUNTER')", name="ck_payments_channel"),
+        Index("ix_payments_loan", "loan_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid.uuid4)
+    loan_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("loans.id"))
+    amount: Mapped[Decimal] = mapped_column(Money())
+    channel: Mapped[str] = mapped_column(String(10))
+    # Mã giao dịch cổng thanh toán (trực tuyến) hoặc mã phiếu thu (tại quầy); chống ghi nhận trùng
+    # (UC28 3b).
+    external_ref: Mapped[str] = mapped_column(String(50), unique=True)
+    paid_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)
+    recorded_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+
+
+class PaymentAllocation(Base):
+    """Phần một Payment phân bổ vào một Kỳ trả nợ, theo thành phần (UC28 bước 4)."""
+
+    __tablename__ = "payment_allocations"
+    __table_args__ = (
+        CheckConstraint(
+            "component IN ('PENALTY','INTEREST','PRINCIPAL')", name="ck_payment_allocations_component"
+        ),
+        CheckConstraint("amount > 0", name="ck_payment_allocations_amount"),
+    )
+
+    payment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("payments.id"), primary_key=True)
+    installment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("installments.id"), primary_key=True
+    )
+    component: Mapped[str] = mapped_column(String(10), primary_key=True)
+    amount: Mapped[Decimal] = mapped_column(Money())
+
+
+class PaymentReminder(Base):
+    """Một lần nhắc nợ đã gửi cho một Kỳ trả nợ ở một mốc (UC30 bước 4)."""
+
+    __tablename__ = "payment_reminders"
+
+    installment_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("installments.id"), primary_key=True
+    )
+    kind: Mapped[str] = mapped_column(String(12), primary_key=True)
+    sent_at: Mapped[datetime] = mapped_column(DATETIMEOFFSET)

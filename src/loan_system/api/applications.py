@@ -88,6 +88,7 @@ Verifier = Annotated[CurrentUser, Depends(require("APPLICATION_VERIFY"))]
 InfoRequester = Annotated[CurrentUser, Depends(require("APPLICATION_REQUEST_INFO"))]
 ScoreViewer = Annotated[CurrentUser, Depends(require("CREDIT_SCORE_VIEW"))]
 Appraiser = Annotated[CurrentUser, Depends(require("APPRAISAL_SUBMIT"))]
+LockResolver = Annotated[CurrentUser, Depends(require("APPLICATION_LOCK_RESOLVE"))]
 
 
 def _applications(db: Db, ctx: Ctx, ip: ClientIp) -> ApplicationService:
@@ -146,6 +147,10 @@ class SubmitRequest(BaseModel):
 
 class CancelRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=200)
+
+
+class LockResolveRequest(BaseModel):
+    reason: str = Field(min_length=10, max_length=200)
 
 
 class ReviewRequest(BaseModel):
@@ -422,6 +427,17 @@ def cancel_application(
     application_id: uuid.UUID, body: CancelRequest, user: CustomerUser, applications: Applications
 ) -> ApplicationResponse:
     return respond(applications.cancel(user, application_id, body.reason))
+
+
+@router.post("/{application_id}/resolve-lock", response_model=ApplicationResponse)
+def resolve_lock(
+    application_id: uuid.UUID,
+    body: LockResolveRequest,
+    user: LockResolver,
+    applications: Applications,
+) -> ApplicationResponse:
+    """Ticket #11: Kiểm soát viên hủy hồ sơ vay bị khóa sau khi điều tra xong (APPLICATION_LOCK_RESOLVE)."""
+    return respond(applications.resolve_lock(user, application_id, body.reason))
 
 
 # --- UC16 và hàng đợi công việc (M05) ------------------------------------------------------------

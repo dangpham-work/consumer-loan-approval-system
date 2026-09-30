@@ -11,6 +11,7 @@
 - Tạo database + migration: `uv run python -m loan_system.create_database` (đọc `DATABASE_URL`, xem `.env.example`)
 - Chạy ứng dụng: `uv run uvicorn loan_system.app:app --reload`
 - Tạo Quản trị viên đầu tiên: `uv run python -m loan_system.create_admin <username> <email> "<họ tên>"` (in mật khẩu tạm; lần đầu đăng nhập phải đổi mật khẩu và đăng ký TOTP)
+- Tác vụ hằng đêm (quá hạn, nhắc nợ, BR11, chấm lại): `uv run python -m loan_system.run_nightly_job` (bộ lập lịch gọi lúc 00:30; chạy lại không cộng dồn)
 
 Test API (`tests/api`) cần một SQL Server thật: mặc định `localhost\MSSQLSERVER02` qua Windows Authentication, ODBC Driver 17. Đổi bằng biến môi trường `LOAN_TEST_SQLSERVER` và `LOAN_TEST_ODBC_DRIVER`. Mỗi phiên test tự tạo và xóa database `loan_test_*`.
 

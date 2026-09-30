@@ -18,6 +18,7 @@ from loan_system.api import (
     errors,
     notifications,
 )
+from loan_system.api import payments as payments_api
 from loan_system.api.deps import AppContext
 from loan_system.clock import Clock, SystemClock
 from loan_system.config import Settings
@@ -63,6 +64,7 @@ def create_app(
     app.include_router(applications.router)
     app.include_router(approvals.router)
     app.include_router(disbursements.router)
+    app.include_router(payments_api.router)
     app.include_router(counter.router)
     app.include_router(notifications.router)
     app.include_router(audit.router)

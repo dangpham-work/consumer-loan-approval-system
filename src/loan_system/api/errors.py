@@ -21,6 +21,7 @@ from loan_system.services.application_service import (
     NationalIdConflict,
     NeedInfoExpired,
     NotEditable,
+    NotLocked,
     NotRequested,
     TooManyDocuments,
 )
@@ -40,6 +41,7 @@ from loan_system.services.audit_query_service import ExportTooLarge
 from loan_system.services.auth_service import InvalidOtp
 from loan_system.services.disbursement_service import (
     IntegrityFailure,
+    NoFailedDisbursement,
     NotApproved,
     PaymentPending,
     PreviouslyFailed,
@@ -49,6 +51,15 @@ from loan_system.services.integrity_service import IntegrityKeyMissing
 from loan_system.services.counter_service import DuplicateCustomer
 from loan_system.services.customer_service import ContactTaken, IncomeLocked
 from loan_system.services.otp_challenge_service import ChallengeFailed
+from loan_system.services.payment_service import (
+    AmountExceedsDue,
+    ChargeFailed,
+    ChargeUnavailable,
+    LoanNotFound,
+    LoanNotPayable,
+    ReceiptRequired,
+    ReferenceReused,
+)
 from loan_system.services.scoring_service import ScoreNotFound
 from loan_system.services.review_service import (
     AlreadyReceived,
@@ -69,6 +80,7 @@ FIXED: dict[type[Exception], tuple[int, str]] = {
         "Khách hàng đang có một hồ sơ vay hoặc khoản vay chưa kết thúc",
     ),
     NotEditable: (status.HTTP_409_CONFLICT, "Hồ sơ vay không ở trạng thái cho phép thao tác này"),
+    NotLocked: (status.HTTP_409_CONFLICT, "Hồ sơ vay không ở trạng thái Bị khóa"),
     InvalidTransition: (
         status.HTTP_409_CONFLICT, "Hồ sơ vay không ở trạng thái cho phép thao tác này"
     ),
@@ -130,6 +142,10 @@ FIXED: dict[type[Exception], tuple[int, str]] = {
         status.HTTP_409_CONFLICT,
         "Lệnh giải ngân trước đã bị cổng thanh toán từ chối. Cần hủy hồ sơ vay để lập lại.",
     ),
+    NoFailedDisbursement: (
+        status.HTTP_409_CONFLICT,
+        "Hồ sơ vay chưa có lệnh giải ngân bị từ chối. Không cần hủy để lập lại.",
+    ),
     # Xác thực lại trước thao tác nhạy cảm (SR02): sai mã thì từ chối như thiếu quyền.
     InvalidOtp: (status.HTTP_403_FORBIDDEN, "Mã OTP không đúng"),
     TransferRejected: (
@@ -150,6 +166,23 @@ FIXED: dict[type[Exception], tuple[int, str]] = {
     ),
     ContactTaken: (
         status.HTTP_409_CONFLICT, "Số điện thoại hoặc email này đã thuộc về một khách hàng khác"
+    ),
+    LoanNotFound: (status.HTTP_404_NOT_FOUND, "Không tìm thấy khoản vay"),
+    LoanNotPayable: (
+        status.HTTP_409_CONFLICT, "Khoản vay không ở trạng thái cho phép thanh toán"
+    ),
+    ReceiptRequired: (status.HTTP_400_BAD_REQUEST, "Cần nhập mã phiếu thu"),
+    ReferenceReused: (
+        status.HTTP_409_CONFLICT, "Mã phiếu thu đã được dùng cho một khoản thanh toán khác"
+    ),
+    AmountExceedsDue: (
+        status.HTTP_400_BAD_REQUEST, "Số tiền vượt quá tổng số tiền còn phải trả"
+    ),
+    ChargeFailed: (
+        status.HTTP_409_CONFLICT, "Cổng thanh toán từ chối giao dịch. Vui lòng thử lại."
+    ),
+    ChargeUnavailable: (
+        status.HTTP_409_CONFLICT, "Cổng thanh toán tạm thời không phản hồi. Vui lòng thử lại."
     ),
 }
 # Thông điệp do tầng nghiệp vụ soạn, an toàn để hiển thị.

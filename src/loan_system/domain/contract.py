@@ -1,7 +1,7 @@
-"""Hợp đồng tín dụng điện tử dạng PDF (UC26 bước 5).
+"""Hợp đồng tín dụng điện tử dạng PDF (UC26 bước 5) và bản lịch trả nợ tải về (UC27 3a).
 
 Chữ được bỏ dấu tiếng Việt vì phông chữ chuẩn của PDF không có đủ dấu (giống watermark ở M06).
-File không nén và mang ngày giải ngân làm ngày tạo, nên cùng điều khoản luôn cho cùng một file:
+Hợp đồng không nén và mang ngày giải ngân làm ngày tạo, nên cùng điều khoản luôn cho cùng một file:
 mã băm SHA-256 lưu kèm hợp đồng nhờ vậy kiểm tra lại được.
 """
 
@@ -66,6 +66,71 @@ def render_contract(terms: ContractTerms) -> bytes:
         values = (str(row.number), f"{row.due_date:%d/%m/%Y}", vnd(row.payment),
                   vnd(row.principal), vnd(row.interest), vnd(row.closing_balance))
         for (_, width), value in zip(_COLUMNS, values):
+            pdf.cell(width, 6, value, border=1, align="R")
+        pdf.ln()
+    return bytes(pdf.output())
+
+
+_SCHEDULE_STATUS_LABELS = {
+    "UPCOMING": "Chua den han", "DUE": "Den han", "PARTIAL": "Tra mot phan", "PAID": "Da tra",
+    "OVERDUE": "Qua han", "CANCELLED": "Da huy",
+}
+_SCHEDULE_COLUMNS = (("Ky", 12), ("Ngay den han", 26), ("Goc", 28), ("Lai", 26),
+                     ("Phi phat", 26), ("Da tra", 28), ("Trang thai", 32))
+
+
+@dataclass(frozen=True)
+class ScheduleRow:
+    number: int
+    due_date: date
+    principal_due: Decimal
+    interest_due: Decimal
+    penalty: Decimal
+    paid_amount: Decimal
+    status: str
+
+
+@dataclass(frozen=True)
+class ScheduleTerms:
+    loan_code: str
+    customer_name: str
+    principal: Decimal
+    annual_rate: Decimal
+    term_months: int
+    outstanding_principal: Decimal
+    generated_on: date
+    rows: Sequence[ScheduleRow]
+
+
+def render_schedule(terms: ScheduleTerms) -> bytes:
+    """UC27 3a: lịch trả nợ hiện tại (số đã trả, phí phạt, trạng thái mỗi kỳ) dưới dạng PDF."""
+    pdf = FPDF()
+    pdf.set_compression(False)
+    pdf.set_creation_date(datetime.combine(terms.generated_on, time(), tzinfo=UTC))
+    pdf.set_title(f"Lich tra no {terms.loan_code}")
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.cell(0, 10, "LICH TRA NO", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", size=10)
+    rate = f"{terms.annual_rate * 100:.2f}".replace(".", ",")
+    for line in (
+        f"Khoan vay: {terms.loan_code}",
+        f"Ben vay: {fold_diacritics(terms.customer_name)}",
+        f"So tien vay: {vnd(terms.principal)} dong - Lai suat: {rate}%/nam - Ky han: "
+        f"{terms.term_months} thang",
+        f"Du no goc con lai: {vnd(terms.outstanding_principal)} dong",
+    ):
+        pdf.cell(0, 6, line, new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(4)
+    for title, width in _SCHEDULE_COLUMNS:
+        pdf.cell(width, 6, title, border=1, align="C")
+    pdf.ln()
+    pdf.set_font("Helvetica", size=9)
+    for row in terms.rows:
+        values = (str(row.number), f"{row.due_date:%d/%m/%Y}", vnd(row.principal_due),
+                  vnd(row.interest_due), vnd(row.penalty), vnd(row.paid_amount),
+                  _SCHEDULE_STATUS_LABELS[row.status])
+        for (_, width), value in zip(_SCHEDULE_COLUMNS, values):
             pdf.cell(width, 6, value, border=1, align="R")
         pdf.ln()
     return bytes(pdf.output())
