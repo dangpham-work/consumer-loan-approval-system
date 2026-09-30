@@ -202,7 +202,7 @@ Kết quả phiên hỏi đáp rà soát đề cương `De_cuong_OOAD_Vay_tin_du
 - [ ] **Phạm vi tổng hợp**: hồ sơ vay tính theo `submitted_at` trong kỳ (số hồ sơ theo trạng thái, tỷ lệ duyệt/từ chối, thời gian xử lý trung bình từ nộp đến quyết định đầu tiên trong `application_status_history`); khoản vay (dư nợ, nhóm nợ, tỷ lệ quá hạn) tính trên các khoản giải ngân trong kỳ (`disbursed_at`), lấy `outstanding_principal`/`debt_group` hiện tại — hệ thống không lưu lịch sử dư nợ theo thời điểm nên không dựng lại được đúng số dư tại `to`.
 - [ ] **`GET /reports/statistics/export`** (`format=CSV|PDF`, mặc định CSV): ghi log `REPORT_EXPORT`. "Excel" cài đặt bằng CSV có BOM UTF-8 để Excel đọc đúng tiếng Việt (cùng cách làm CSV của ticket #15, không thêm phụ thuộc xlsx); PDF dùng fpdf2, chữ bỏ dấu như hợp đồng (ticket #10). Báo cáo chỉ có số liệu tổng hợp (đếm, tổng tiền, tỷ lệ), không có tên khách hàng hay mã hồ sơ vay (SR07).
 - [ ] **Không có bảng mới**: mọi chỉ tiêu tính trực tiếp từ các bảng đã có (`loan_applications`, `application_status_history`, `disbursements`, `loans`, `credit_scores`).
-- [ ] **Màn hình**: dự án chưa có tầng Jinja2, nên ticket này chỉ gồm API (như ticket #14).
+- [x] **Màn hình**: ticket này chỉ gồm API (như ticket #14); màn hình M11 làm ở ticket #28.
 
 ## Phát sinh khi cài đặt (ticket #22)
 
@@ -258,3 +258,9 @@ Kết quả phiên hỏi đáp rà soát đề cương `De_cuong_OOAD_Vay_tin_du
 - [ ] **Đường dẫn M10**: `/app/audit` (cần `AUDIT_VIEW`), 50 bản ghi mỗi trang, mới nhất trước. Lọc theo khoảng ngày (giờ Việt Nam, tính trọn ngày ở hai đầu), người thực hiện theo tên đăng nhập (thêm `AuditQueryService.actor_id` và `usernames`; bảng hiện tên đăng nhập thay cho mã định danh, bản ghi không có người thực hiện hiện "Hệ thống"), hành động và mức độ. Nhập sai bộ lọc thì 400 kèm thông báo. "Xuất CSV" (`/app/audit/export`) dùng đúng bộ lọc đang xem, cùng định dạng và giới hạn dòng với REST API.
 - [ ] **Kiểm tra toàn vẹn trên M10**: nút "Kiểm tra toàn vẹn chuỗi" (POST `/app/audit/verify`, cần `AUDIT_VERIFY`) duyệt lại toàn bộ chuỗi băm và báo "toàn vẹn" hoặc số của bản ghi đầu tiên bị phá vỡ (ST08 qua giao diện: sửa thẳng một bản ghi bằng tài khoản quản trị CSDL thì trang chỉ ra đúng bản ghi đó). Lần kiểm tra không ghi nhật ký, như REST API.
 - [ ] **Menu "Quản trị"** dẫn tới thẻ M09 đầu tiên người dùng được mở (`USER_MANAGE`, `ROLE_MANAGE` hoặc `POLICY_CONFIGURE`), để vai trò tùy biến chỉ có quyền chính sách vẫn vào được M09.
+
+## Phát sinh khi cài đặt (ticket #28)
+
+- [ ] **Đường dẫn M11**: `/app/reports?from=…&to=…`, mặc định từ ngày 1 của tháng hiện tại đến hôm nay (giờ Việt Nam). Ngày sai định dạng, ngày kết thúc trước ngày bắt đầu hoặc quá 12 tháng thì 400, hiện thông điệp ngay trên trang và giữ khoảng đã nhập (cùng thông điệp với REST API).
+- [ ] **Biểu đồ** vẽ bằng thanh CSS (độ dài theo giá trị lớn nhất của biểu đồ), không thêm thư viện JavaScript: hồ sơ vay theo trạng thái, khoản vay theo nhóm nợ, hồ sơ vay theo hạng tín dụng. Ô số liệu: tổng hồ sơ vay, tỷ lệ duyệt/từ chối, thời gian xử lý trung bình, tổng giải ngân, dư nợ gốc, tỷ lệ quá hạn; tỷ lệ không tính được (không có dữ liệu) hiện "Chưa có dữ liệu" thay vì 0%.
+- [ ] **Xuất CSV/PDF** ở `/app/reports/export?from=…&to=…&format=CSV|PDF`, đúng khoảng đang xem, ghi `REPORT_EXPORT` như REST API. Khoảng sai thì hiện lại M11 kèm thông điệp, không ghi log.
