@@ -8,18 +8,7 @@
   <script src="{{ url_for('static', path='app.js') }}" defer></script>
 </head>
 <body{% if idle_seconds %} data-idle-seconds="{{ idle_seconds }}"{% endif %}>
-  <header class="topbar">
-    <a class="brand" href="/app">Vay tín dụng tiêu dùng</a>
-    {% if user %}
-    <div class="account">
-      <span class="who">{{ user.username }}</span>
-      <form method="post" action="/app/logout">
-        <input type="hidden" name="csrf" value="{{ csrf }}">
-        <button type="submit" class="link">Đăng xuất</button>
-      </form>
-    </div>
-    {% endif %}
-  </header>
+  <a class="skip" href="#main">Đến nội dung chính</a>
 
   <div class="notices" role="status" aria-live="polite">
     {% if notice %}<p class="notice">{{ notice }}</p>{% endif %}
@@ -29,20 +18,45 @@
     </p>
   </div>
 
+  {% block shell %}
   <div class="layout{% if not user %} layout-guest{% endif %}">
     {% if user %}
-    <nav class="sidebar" aria-label="Chức năng">
-      <ul>
-        {% for item in menu %}
-        <li><a href="{{ item.path }}"{% if request.url.path == item.path %} aria-current="page"{% endif %}>{{ item.label }}</a></li>
-        {% endfor %}
-      </ul>
-    </nav>
+    <aside class="sidebar">
+      <a class="brand" href="/app"><span class="brand-mark" aria-hidden="true"></span>Vay tín dụng tiêu dùng</a>
+      <nav aria-label="Chức năng">
+        <ul>
+          {% for item in menu %}
+          {# Trang con (ví dụ chi tiết hồ sơ vay trong hàng đợi) vẫn làm sáng mục cha. #}
+          {% set here = request.url.path == item.path or (item.path != "/app" and request.url.path.startswith(item.path ~ "/")) %}
+          <li><a href="{{ item.path }}"{% if here %} aria-current="page"{% endif %}>{{ item.label }}{% if unread and item.path == "/app/notifications" %} <span class="count" title="Chưa đọc">{{ unread }}</span>{% endif %}</a></li>
+          {% endfor %}
+        </ul>
+      </nav>
+      <div class="account">
+        <span class="who">{{ user.username }}</span>
+        <form method="post" action="/app/logout">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button type="submit" class="link">Đăng xuất</button>
+        </form>
+      </div>
+    </aside>
+    {% else %}
+    <aside class="welcome">
+      <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span>Vay tín dụng tiêu dùng</a>
+      <p class="welcome-lead">Vay tín chấp từ 5 đến 100 triệu đồng, trả góp 6 đến 36 tháng.</p>
+      <ol class="journey">
+        <li>Nộp hồ sơ vay trực tuyến hoặc tại quầy</li>
+        <li>Chấm điểm tín dụng và thẩm định</li>
+        <li>Phê duyệt và giải ngân vào tài khoản của bạn</li>
+        <li>Trả nợ theo lịch, tất toán bất cứ lúc nào</li>
+      </ol>
+    </aside>
     {% endif %}
-    <main class="content">
+    <main class="content" id="main">
       {% block content %}{% endblock %}
     </main>
   </div>
+  {% endblock %}
 
   <dialog id="confirm-dialog">
     <form method="dialog">

@@ -62,6 +62,7 @@
 
 {% if approval.can_decide and not stale %}
 {% set f = form %}
+<div class="columns">
 {% if report.recommendation == "APPROVE" %}
 <section class="card">
   <h2>Phê duyệt</h2>
@@ -92,6 +93,7 @@
     <button type="submit" class="danger">Từ chối</button>
   </form>
 </section>
+</div>
 <section class="card">
   <h2>Trả về thẩm định</h2>
   <form method="post" action="/app/queue/{{ application.id }}/return">

@@ -19,6 +19,28 @@
   <p class="muted">Họ tên, ngày sinh và số CCCD không đổi được ở đây. Muốn đổi, vui lòng liên hệ nhân viên tín dụng.</p>
 </section>
 <section class="card">
+  <h2>Đổi số điện thoại, email</h2>
+  <p class="muted">Mã OTP xác nhận được gửi tới số điện thoại hiện tại. Số điện thoại cũng là tên đăng nhập của bạn.</p>
+  {{ errors(None, contact_errors or ()) }}
+  {% set c = contact or {} %}
+  <form method="post" action="/app/profile/contact" class="inline">
+    {{ csrf_field() }}
+    <input type="hidden" name="field" value="phone">
+    <label>Số điện thoại mới
+      <input name="new_value" value="{{ c.phone or '' }}" inputmode="tel" pattern="0\d{9}" autocomplete="off" required>
+    </label>
+    <button type="submit" class="secondary">Gửi mã OTP</button>
+  </form>
+  <form method="post" action="/app/profile/contact" class="inline">
+    {{ csrf_field() }}
+    <input type="hidden" name="field" value="email">
+    <label>Email mới
+      <input type="email" name="new_value" value="{{ c.email or '' }}" maxlength="100" autocomplete="off" required>
+    </label>
+    <button type="submit" class="secondary">Gửi mã OTP</button>
+  </form>
+</section>
+<section class="card">
   <form method="post" action="/app/profile">
     {{ csrf_field() }}
     <label>Nghề nghiệp <input name="occupation" value="{{ values.occupation }}" minlength="2" maxlength="50"></label>

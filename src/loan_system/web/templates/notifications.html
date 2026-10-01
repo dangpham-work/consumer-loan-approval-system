@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% from "_macros.html" import badge, csrf_field with context %}
+{% block title %}Thông báo{% endblock %}
+{% block content %}
+<div class="heading">
+  <h1>Thông báo</h1>
+  {% if unread %}
+  <form method="post" action="/app/notifications/read-all">
+    {{ csrf_field() }}
+    <button type="submit" class="secondary">Đánh dấu tất cả đã đọc</button>
+  </form>
+  {% endif %}
+</div>
+{% if notifications %}
+<ul class="feed">
+  {% for n in notifications %}
+  <li{% if not n.is_read %} class="unread"{% endif %}>
+    <div>
+      <p>{{ n.content }}</p>
+      <span class="muted">{{ n.created_at | moment }}</span>
+    </div>
+    {% if not n.is_read %}
+    <form method="post" action="/app/notifications/{{ n.id }}/read">
+      {{ csrf_field() }}
+      <button type="submit" class="link">Đã đọc</button>
+    </form>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+<p class="muted">Hiển thị tối đa 50 thông báo mới nhất.</p>
+{% else %}
+<section class="card">
+  <p>Bạn chưa có thông báo nào. Thông báo về hồ sơ vay và khoản vay sẽ xuất hiện ở đây.</p>
+</section>
+{% endif %}
+{% endblock %}

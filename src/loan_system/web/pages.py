@@ -32,6 +32,7 @@ from loan_system.services.auth_service import (
     NotAuthenticated,
     Stage,
 )
+from loan_system.services.notification_service import NotificationService
 from loan_system.web import labels
 
 PREFIX = "/app"
@@ -63,6 +64,8 @@ NOTICES = {
     "submitted": "Đã nộp hồ sơ vay. Chúng tôi sẽ thông báo khi có kết quả.",
     "cancelled": "Đã hủy hồ sơ vay.",
     "profile_saved": "Đã lưu thông tin cá nhân.",
+    "contact_saved": "Đã đổi thông tin liên hệ.",
+    "lock_resolved": "Đã hủy hồ sơ vay bị khóa.",
     "paid": "Đã ghi nhận thanh toán.",
     "settled": "Đã tất toán khoản vay.",
     "staff_created": "Đã tạo tài khoản nhân viên. Mật khẩu tạm đã gửi tới email công việc.",
@@ -84,6 +87,7 @@ class MenuItem:
 # Danh sách màn hình mục 4.3b. M06, M07, M08 mở từ hàng đợi hồ sơ vay (M05), không có mục riêng.
 MENU = (
     MenuItem("Trang chủ", PREFIX),
+    MenuItem("Thông báo", f"{PREFIX}/notifications"),
     MenuItem("Nộp hồ sơ vay", f"{PREFIX}/applications/new", "APPLICATION_CREATE", "CUSTOMER"),
     MenuItem("Khoản vay của tôi", f"{PREFIX}/loans", "PAYMENT_RECORD", "CUSTOMER"),
     MenuItem("Thông tin cá nhân", f"{PREFIX}/profile", kind="CUSTOMER"),
@@ -94,6 +98,7 @@ MENU = (
     MenuItem("Quản trị", f"{PREFIX}/admin/roles", "ROLE_MANAGE"),
     MenuItem("Quản trị", f"{PREFIX}/admin/policies", "POLICY_CONFIGURE"),
     MenuItem("Nhật ký kiểm toán", f"{PREFIX}/audit", "AUDIT_VIEW"),
+    MenuItem("Hồ sơ vay bị khóa", f"{PREFIX}/locked", "APPLICATION_LOCK_RESOLVE", "EMPLOYEE"),
     MenuItem("Báo cáo thống kê", f"{PREFIX}/reports", "REPORT_VIEW"),
 )
 
@@ -126,6 +131,12 @@ class LoginRequired(Exception):
         self.notice = notice
 
 
+def _unread(ctx: AppContext, user: CurrentUser) -> int:
+    """Số thông báo chưa đọc, hiện cạnh mục "Thông báo" của menu trên mọi trang."""
+    with ctx.session_factory() as db:
+        return NotificationService(db, ctx.clock, ctx.sms).unread_count(user.user_id)
+
+
 def render(
     request: Request,
     template: str,
@@ -144,6 +155,7 @@ def render(
             "csrf": token,
             "user": user,
             "menu": menu_for(user) if user else [],
+            "unread": _unread(ctx, user) if user else 0,
             "notice": notice,
             # Đếm ngược cảnh báo hết phiên (SR11), chỉ khi đã đăng nhập.
             "idle_seconds": ctx.settings.session_idle_minutes * 60 if user else None,

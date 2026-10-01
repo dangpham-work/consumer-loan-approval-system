@@ -10,6 +10,7 @@
 </div>
 {{ errors(error, field_errors or ()) }}
 
+<div class="columns">
 <section class="card">
   <h2>Khoản vay</h2>
   <dl class="summary">
@@ -22,24 +23,6 @@
   </dl>
   <p><a class="button secondary" href="/app/loans/{{ loan.loan_id }}/schedule.pdf">Tải lịch trả nợ PDF</a></p>
 </section>
-
-<section class="card">
-  <h2>Các kỳ trả nợ</h2>
-  <table class="table">
-    <thead><tr><th>Kỳ</th><th>Hạn trả</th><th>Gốc</th><th>Lãi</th><th>Phí phạt</th><th>Đã trả</th><th>Trạng thái</th></tr></thead>
-    <tbody>
-    {% for i in loan.installments %}
-    {% set il, it = INSTALLMENT_STATUS.get(i.status, (i.status, "neutral")) %}
-    <tr>
-      <td>{{ i.number }}</td><td>{{ i.due_date | day }}</td><td>{{ i.principal_due | money }}</td>
-      <td>{{ i.interest_due | money }}</td><td>{{ i.penalty | money }}</td><td>{{ i.paid_amount | money }}</td>
-      <td>{{ badge(il, it) }}</td>
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</section>
-
 {% if can_pay %}
 <section class="card">
   <h2>{{ "Thanh toán trực tuyến" if online else "Ghi nhận thanh toán tại quầy" }}</h2>
@@ -59,6 +42,25 @@
   </form>
 </section>
 {% endif %}
+</div>
+
+<section class="card">
+  <h2>Các kỳ trả nợ</h2>
+  <table class="table">
+    <thead><tr><th>Kỳ</th><th>Hạn trả</th><th>Gốc</th><th>Lãi</th><th>Phí phạt</th><th>Đã trả</th><th>Trạng thái</th></tr></thead>
+    <tbody>
+    {% for i in loan.installments %}
+    {% set il, it = INSTALLMENT_STATUS.get(i.status, (i.status, "neutral")) %}
+    <tr>
+      <td>{{ i.number }}</td><td>{{ i.due_date | day }}</td><td>{{ i.principal_due | money }}</td>
+      <td>{{ i.interest_due | money }}</td><td>{{ i.penalty | money }}</td><td>{{ i.paid_amount | money }}</td>
+      <td>{{ badge(il, it) }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
 
 {% if quote %}
 <section class="card">

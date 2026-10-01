@@ -3,8 +3,14 @@
 {% if score %}
 <section class="card">
   <h2>Kết quả chấm điểm</h2>
+  {% if score.score is not none %}
+  <div class="score-hero">
+    <div><span class="muted">Điểm tín dụng</span><strong class="score-value">{{ score.score }}</strong></div>
+    <div><span class="muted">Tối đa 1000 điểm</span><strong>Hạng {{ score.grade }}</strong></div>
+  </div>
+  {% endif %}
   <dl class="summary">
-    <dt>Điểm tín dụng</dt><dd>{% if score.score is not none %}{{ score.score }} · Hạng {{ score.grade }}{% else %}Không chấm điểm{% endif %}</dd>
+    {% if score.score is none %}<dt>Điểm tín dụng</dt><dd>Không chấm điểm</dd>{% endif %}
     {% if score.knock_out_reason %}<dt>Lý do loại</dt><dd>{{ score.knock_out_reason }}</dd>{% endif %}
     <dt>DTI khi chấm điểm</dt><dd>{{ score.dti | percent }}</dd>
     {% if score.annual_rate is not none %}<dt>Lãi suất theo hạng</dt><dd>{{ score.annual_rate | percent }}/năm</dd>{% endif %}

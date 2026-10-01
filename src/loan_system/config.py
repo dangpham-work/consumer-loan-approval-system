@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     hmac_integrity_key_version: int = 1
     hmac_integrity_old_keys: dict[int, str] = {}
 
+    # Chỉ cho môi trường dev: ghi SMS (mã OTP) và email (mật khẩu tạm) giả lập ra log máy chủ.
+    dev_echo_messages: bool = False
+
     session_idle_minutes: int = 15  # SR11
     otp_ttl_minutes: int = 5
     otp_max_attempts: int = 3  # UC09 4a, UC02 3b
