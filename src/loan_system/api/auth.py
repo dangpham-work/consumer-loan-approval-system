@@ -54,10 +54,14 @@ class SessionInfo(BaseModel):
     permissions: list[str]
 
 
-def _set_session_cookie(response: Response, token: str) -> None:
+def set_session_cookie(response: Response, token: str) -> None:
     response.set_cookie(
         SESSION_COOKIE, token, httponly=True, secure=True, samesite="strict", path="/"
     )
+
+
+def clear_session_cookie(response: Response) -> None:
+    response.delete_cookie(SESSION_COOKIE, httponly=True, secure=True, samesite="strict", path="/")
 
 
 def _unauthenticated() -> HTTPException:
@@ -76,7 +80,7 @@ def login(body: LoginRequest, auth: Auth, ctx: Ctx, ip: ClientIp, response: Resp
         ) from exc
     except InvalidCredentials as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Thông tin đăng nhập không đúng") from exc
-    _set_session_cookie(response, result.token)
+    set_session_cookie(response, result.token)
     return LoginResponse(message="Đăng nhập thành công", next=result.next_step)
 
 
@@ -153,4 +157,4 @@ def logout(auth: Auth, response: Response, session: SessionToken = None) -> None
         auth.logout(session)
     except NotAuthenticated as exc:
         raise _unauthenticated() from exc
-    response.delete_cookie(SESSION_COOKIE, httponly=True, secure=True, samesite="strict", path="/")
+    clear_session_cookie(response)

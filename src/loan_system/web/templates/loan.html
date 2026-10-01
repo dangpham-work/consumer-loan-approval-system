@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% from "_macros.html" import badge, csrf_field, errors with context %}
+{% block title %}Lịch trả nợ{% endblock %}
+{% block content %}
+{% set label, tone = LOAN_STATUS.get(loan.status, (loan.status, "neutral")) %}
+{% set f = form %}
+<div class="heading">
+  <h1>Lịch trả nợ</h1>
+  {{ badge(label, tone) }}
+</div>
+{{ errors(error, field_errors or ()) }}
+
+<section class="card">
+  <h2>Khoản vay</h2>
+  <dl class="summary">
+    <dt>Số tiền vay</dt><dd>{{ loan.principal | money }}</dd>
+    <dt>Lãi suất</dt><dd>{{ loan.annual_rate | percent }}/năm</dd>
+    <dt>Kỳ hạn</dt><dd>{{ loan.term_months }} tháng</dd>
+    <dt>Dư nợ gốc</dt><dd>{{ loan.outstanding_principal | money }}</dd>
+    <dt>Cần thanh toán ngay</dt><dd>{{ loan.amount_due | money }}</dd>
+    {% if loan.next_due_date %}<dt>Kỳ đến hạn tiếp theo</dt><dd>{{ loan.next_due_date | day }} · {{ loan.next_due_amount | money }}</dd>{% endif %}
+  </dl>
+  <p><a class="button secondary" href="/app/loans/{{ loan.loan_id }}/schedule.pdf">Tải lịch trả nợ PDF</a></p>
+</section>
+
+<section class="card">
+  <h2>Các kỳ trả nợ</h2>
+  <table class="table">
+    <thead><tr><th>Kỳ</th><th>Hạn trả</th><th>Gốc</th><th>Lãi</th><th>Phí phạt</th><th>Đã trả</th><th>Trạng thái</th></tr></thead>
+    <tbody>
+    {% for i in loan.installments %}
+    {% set il, it = INSTALLMENT_STATUS.get(i.status, (i.status, "neutral")) %}
+    <tr>
+      <td>{{ i.number }}</td><td>{{ i.due_date | day }}</td><td>{{ i.principal_due | money }}</td>
+      <td>{{ i.interest_due | money }}</td><td>{{ i.penalty | money }}</td><td>{{ i.paid_amount | money }}</td>
+      <td>{{ badge(il, it) }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% if can_pay %}
+<section class="card">
+  <h2>{{ "Thanh toán trực tuyến" if online else "Ghi nhận thanh toán tại quầy" }}</h2>
+  <p class="muted">Tiền được trừ vào phí phạt, lãi rồi gốc của kỳ quá hạn cũ nhất trước; phần dư trả trước cho kỳ sau.</p>
+  <form method="post" action="/app/loans/{{ loan.loan_id }}/payments">
+    {{ csrf_field() }}
+    {% if online %}<input type="hidden" name="idempotency_key" value="{{ pay_key }}">{% endif %}
+    <label>Số tiền (đồng)
+      <input name="amount" inputmode="numeric" pattern="\d+" required value="{{ f.amount if f.amount is defined else (loan.amount_due or loan.next_due_amount) }}">
+    </label>
+    {% if not online %}
+    <label>Mã phiếu thu
+      <input name="receipt_no" maxlength="50" required value="{{ f.receipt_no or '' }}">
+    </label>
+    {% endif %}
+    <button type="submit">{{ "Thanh toán" if online else "Ghi nhận thanh toán" }}</button>
+  </form>
+</section>
+{% endif %}
+
+{% if quote %}
+<section class="card">
+  <h2>Tất toán trước hạn</h2>
+  <p>Báo giá ngày {{ quote.quoted_on | day }}, chỉ có hiệu lực trong ngày.</p>
+  <dl class="summary">
+    <dt>Dư nợ gốc</dt><dd>{{ quote.principal | money }}</dd>
+    <dt>Lãi các kỳ đã đến hạn</dt><dd>{{ quote.due_interest | money }}</dd>
+    <dt>Lãi tính đến hôm nay</dt><dd>{{ quote.accrued_interest | money }}</dd>
+    <dt>Phí phạt</dt><dd>{{ quote.penalty | money }}</dd>
+    <dt>Phí trả nợ trước hạn</dt><dd>{{ quote.prepayment_fee | money }}</dd>
+    <dt>Số tiền tất toán</dt><dd><strong>{{ quote.total | money }}</strong></dd>
+  </dl>
+  <form method="post" action="/app/loans/{{ loan.loan_id }}/settlement" data-confirm="Tất toán khoản vay với số tiền {{ quote.total | money }}? Khoản vay sẽ kết thúc sau khi thanh toán.">
+    {{ csrf_field() }}
+    <input type="hidden" name="amount" value="{{ quote.total }}">
+    <input type="hidden" name="quoted_on" value="{{ quote.quoted_on.isoformat() }}">
+    {% if online %}<input type="hidden" name="idempotency_key" value="{{ settle_key }}">
+    {% else %}
+    <label>Mã phiếu thu
+      <input name="receipt_no" maxlength="50" required>
+    </label>
+    {% endif %}
+    <button type="submit">Tất toán</button>
+  </form>
+</section>
+{% endif %}
+<p>{% if online %}<a href="/app/loans">Về khoản vay của tôi</a>{% else %}<a href="/app/queue">Về hàng đợi</a>{% endif %}</p>
+{% endblock %}

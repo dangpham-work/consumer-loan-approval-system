@@ -126,8 +126,13 @@ class AppraisalService:
         self._sod = SegregationOfDuties(db, clock, sms, ip)
         self._ip = ip
 
-    def open(self, user: CurrentUser, application_id: uuid.UUID) -> AppraisalView:
-        """SD04 bước 2–9: kiểm tra SoD, nhận thẩm định, hiển thị hồ sơ vay với PII đầy đủ."""
+    def open(
+        self, user: CurrentUser, application_id: uuid.UUID, *, reveal: bool = True
+    ) -> AppraisalView:
+        """SD04 bước 2–9: kiểm tra SoD, nhận thẩm định, hiển thị hồ sơ vay với PII đầy đủ.
+
+        Màn hình web M06 mở với `reveal=False`: dữ liệu che sẵn, CCCD và thu nhập chỉ hiện (và ghi
+        VIEW_PII) khi chuyên viên bấm "Hiện"."""
         application = self._appraising(user, application_id)
         if application.appraised_by not in (None, user.employee_id):
             raise AlreadyAppraised
@@ -135,7 +140,7 @@ class AppraisalService:
             application.appraised_by = user.employee_id
             self._applications.log("APPRAISAL_ASSIGN", user, application.id)
         # M06: CCCD và thu nhập hiển thị đầy đủ nên mỗi lần mở hồ sơ vay đều ghi VIEW_PII.
-        reveal = PII_PERMISSION in user.permissions
+        reveal = reveal and PII_PERMISSION in user.permissions
         if reveal:
             self._audit.log_pii_view(
                 user.user_id, target_type="CUSTOMER", target_id=application.customer_id,
@@ -204,6 +209,12 @@ class AppraisalService:
         )
         self._applications.commit()
         return self._view(user, application, reveal_pii=False)
+
+    def report(self, user: CurrentUser, application_id: uuid.UUID) -> ReportView | None:
+        """Tờ trình có hiệu lực của hồ sơ vay trong phạm vi người xem (M06 sau khi đã thẩm định)."""
+        application = self._applications.load(user, application_id)
+        latest = latest_report(self._db, application.id)
+        return report_view(latest) if latest is not None else None
 
     def document(
         self, user: CurrentUser, application_id: uuid.UUID, document_id: uuid.UUID

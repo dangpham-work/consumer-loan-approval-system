@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% from "_macros.html" import badge, csrf_field, errors with context %}
+{% block title %}Nhật ký kiểm toán{% endblock %}
+{% block content %}
+<div class="heading">
+  <h1>Nhật ký kiểm toán</h1>
+  {% if can_verify %}
+  <form method="post" action="/app/audit/verify">
+    {{ csrf_field() }}
+    <button type="submit" class="secondary">Kiểm tra toàn vẹn chuỗi</button>
+  </form>
+  {% endif %}
+</div>
+{% if verified %}
+{% if broken_at is none %}
+<p class="alert alert-ok"><strong>Chuỗi nhật ký toàn vẹn:</strong> mọi bản ghi khớp mã băm, không bản ghi nào bị sửa hay xóa.</p>
+{% else %}
+<p class="alert alert-danger"><strong>Chuỗi nhật ký bị phá vỡ</strong> tại bản ghi số {{ broken_at }}: bản ghi này hoặc bản ghi liền trước đã bị sửa hay xóa ngoài hệ thống.</p>
+{% endif %}
+{% endif %}
+{{ errors(error) }}
+{% set c = criteria %}
+<form method="get" action="/app/audit" class="card filters">
+  <label>Từ ngày <input type="date" name="from" value="{{ c.from_ }}"></label>
+  <label>Đến ngày <input type="date" name="to" value="{{ c.to }}"></label>
+  <label>Người thực hiện (tên đăng nhập) <input name="actor" value="{{ c.actor }}" maxlength="50"></label>
+  <label>Hành động <input name="action" value="{{ c.action }}" maxlength="50" placeholder="Ví dụ LOGIN_FAIL"></label>
+  <label>Mức độ
+    <select name="level">
+      <option value="">Tất cả</option>
+      {% for l in levels %}<option value="{{ l }}"{% if c.level == l %} selected{% endif %}>{{ l }}</option>{% endfor %}
+    </select>
+  </label>
+  <button type="submit" class="secondary">Lọc</button>
+  <a href="/app/audit/export?{{ query }}">Xuất CSV</a>
+</form>
+<section class="card">
+  {% if entries %}
+  <table class="table">
+    <thead><tr><th>Số</th><th>Thời điểm</th><th>Người thực hiện</th><th>Hành động</th><th>Đối tượng</th><th>IP</th><th>Mức độ</th><th>Chi tiết</th></tr></thead>
+    <tbody>
+    {% for e in entries %}
+    {% set label, tone = AUDIT_LEVEL.get(e.level, (e.level, "neutral")) %}
+    <tr>
+      <td>{{ e.seq }}</td>
+      <td>{{ e.created_at | moment }}</td>
+      <td>{{ usernames.get(e.actor_id, "") if e.actor_id else "Hệ thống" }}</td>
+      <td>{{ e.action }}</td>
+      <td class="break">{{ e.target_type or "" }} {{ e.target_id or "" }}</td>
+      <td>{{ e.ip_address or "" }}</td>
+      <td>{{ badge(label, tone) }}</td>
+      <td class="break">{{ e.detail or "" }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">Không có bản ghi nào khớp bộ lọc.</p>
+  {% endif %}
+  <p class="actions">
+    {% if page > 1 %}<a href="/app/audit?{{ query }}{{ '&' if query }}page={{ page - 1 }}">Trang trước</a>{% endif %}
+    {% if has_next %}<a href="/app/audit?{{ query }}{{ '&' if query }}page={{ page + 1 }}">Trang sau</a>{% endif %}
+  </p>
+</section>
+{% endblock %}

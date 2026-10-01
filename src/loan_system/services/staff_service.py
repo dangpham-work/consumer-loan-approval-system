@@ -53,6 +53,17 @@ class NewStaff:
     roles: frozenset[str]
 
 
+@dataclass(frozen=True)
+class StaffView:
+    user_id: uuid.UUID
+    username: str
+    full_name: str
+    email: str
+    branch: str
+    status: str
+    roles: list[str]
+
+
 def new_temporary_password() -> str:
     return secrets.token_urlsafe(12)  # 16 ký tự ngẫu nhiên, dài hơn MIN_PASSWORD_LENGTH (SR01)
 
@@ -127,6 +138,30 @@ class StaffService:
         self._audit = AuditService(db, clock)
         self._ip = ip
 
+    def list_staff(self) -> list[StaffView]:
+        """UC04 bước 1 (M09): danh sách tài khoản nhân viên kèm vai trò."""
+        rows = self._db.execute(
+            select(User, Employee)
+            .join(Employee, Employee.id == User.employee_id)
+            .order_by(User.username)
+        ).all()
+        views = [self._view(user, employee) for user, employee in rows]
+        self._db.rollback()  # chỉ đọc
+        return views
+
+    def get(self, user_id: uuid.UUID) -> StaffView:
+        row = self._db.execute(
+            select(User, Employee)
+            .join(Employee, Employee.id == User.employee_id)
+            .where(User.id == user_id)
+        ).one_or_none()
+        if row is None:
+            self._db.rollback()
+            raise StaffNotFound
+        view = self._view(*row)
+        self._db.rollback()  # chỉ đọc
+        return view
+
     def create(self, actor: CurrentUser, data: NewStaff) -> uuid.UUID:
         password = new_temporary_password()
         user = _insert_staff(self._db, self._clock, data, password)
@@ -171,3 +206,14 @@ class StaffService:
         )
         self._db.commit()
 
+    def _view(self, user: User, employee: Employee) -> StaffView:
+        roles = self._db.scalars(
+            select(Role.code)
+            .join(UserRole, UserRole.role_id == Role.id)
+            .where(UserRole.user_id == user.id)
+            .order_by(Role.code)
+        ).all()
+        return StaffView(
+            user_id=user.id, username=user.username, full_name=employee.full_name,
+            email=employee.email, branch=employee.branch, status=user.status, roles=list(roles),
+        )

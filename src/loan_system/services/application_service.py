@@ -184,6 +184,7 @@ class ApplicationView:
     need_info: NeedInfoView | None
     created_by: uuid.UUID | None
     received_by: uuid.UUID | None
+    appraised_by: uuid.UUID | None
     created_at: datetime
     submitted_at: datetime | None
 
@@ -193,6 +194,7 @@ class ApplicationSummary:
     id: uuid.UUID
     code: str | None
     customer_id: uuid.UUID
+    customer_name: str
     status: str
     requested_amount: Decimal
     term_months: int
@@ -495,8 +497,13 @@ class ApplicationService:
     def get(self, user: CurrentUser, application_id: uuid.UUID) -> ApplicationView:
         return self.view(self.load(user, application_id), user)
 
-    def list_visible(self, user: CurrentUser, status: str | None) -> list[ApplicationSummary]:
-        query = select(LoanApplication)
+    def list_visible(
+        self, user: CurrentUser, status: str | None, search: str | None = None
+    ) -> list[ApplicationSummary]:
+        """`search`: một phần mã hồ sơ vay hoặc họ tên khách hàng (M05), lọc trước giới hạn số dòng."""
+        query = select(LoanApplication, Customer.full_name).join(
+            Customer, Customer.id == LoanApplication.customer_id
+        )
         if user.customer_id is not None:
             query = query.where(LoanApplication.customer_id == user.customer_id).order_by(
                 LoanApplication.created_at.desc()
@@ -510,18 +517,24 @@ class ApplicationService:
             )
         if status is not None:
             query = query.where(LoanApplication.status == status)
+        if search:
+            query = query.where(or_(
+                LoanApplication.code.contains(search, autoescape=True),
+                Customer.full_name.contains(search, autoescape=True),
+            ))
         return [
             ApplicationSummary(
                 id=a.id,
                 code=a.code,
                 customer_id=a.customer_id,
+                customer_name=full_name,
                 status=a.status,
                 requested_amount=a.requested_amount,
                 term_months=a.term_months,
                 created_at=a.created_at,
                 submitted_at=a.submitted_at,
             )
-            for a in self._db.scalars(query).all()
+            for a, full_name in self._db.execute(query).all()
         ]
 
     # --- Dùng chung cho các dịch vụ xử lý hồ sơ vay ---------------------------------------------
@@ -641,6 +654,7 @@ class ApplicationService:
             need_info=need_info,
             created_by=None if is_customer else application.created_by,
             received_by=None if is_customer else application.received_by,
+            appraised_by=None if is_customer else application.appraised_by,
             created_at=application.created_at,
             submitted_at=application.submitted_at,
         )

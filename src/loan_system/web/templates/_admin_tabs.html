@@ -1,0 +1,6 @@
+{# Thẻ của M09; mỗi thẻ chỉ hiện với người có quyền tương ứng (máy chủ vẫn kiểm tra từng trang). #}
+<nav class="tabs" aria-label="Quản trị">
+  {% if "USER_MANAGE" in user.permissions %}<a href="/app/admin"{% if tab == "users" %} aria-current="page"{% endif %}>Tài khoản nhân viên</a>{% endif %}
+  {% if "ROLE_MANAGE" in user.permissions %}<a href="/app/admin/roles"{% if tab == "roles" %} aria-current="page"{% endif %}>Vai trò – quyền</a>{% endif %}
+  {% if "POLICY_CONFIGURE" in user.permissions %}<a href="/app/admin/policies"{% if tab == "policies" %} aria-current="page"{% endif %}>Chính sách phê duyệt</a>{% endif %}
+</nav>

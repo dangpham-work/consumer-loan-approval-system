@@ -14,7 +14,7 @@ from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
 from loan_system.domain.audit import AuditContent, AuditRecord, verify_chain
-from loan_system.repositories.models import AuditLog
+from loan_system.repositories.models import AuditLog, User
 
 LIST_MAX = 200
 EXPORT_MAX_ROWS = 5000
@@ -85,6 +85,18 @@ class AuditQueryService:
                 entry.level, entry.detail or "",
             ])
         return buffer.getvalue()
+
+    def actor_id(self, username: str) -> uuid.UUID | None:
+        """Mã người dùng theo tên đăng nhập, để M10 lọc theo người thay cho mã định danh."""
+        return self._db.scalars(select(User.id).where(User.username == username)).one_or_none()
+
+    def usernames(self, entries: list[AuditLogEntry]) -> dict[uuid.UUID, str]:
+        """Tên đăng nhập của người thực hiện các bản ghi `entries` (M10 hiển thị thay mã)."""
+        ids = {entry.actor_id for entry in entries if entry.actor_id is not None}
+        if not ids:
+            return {}
+        rows = self._db.execute(select(User.id, User.username).where(User.id.in_(ids))).all()
+        return {row.id: row.username for row in rows}
 
     def verify_integrity(self) -> int | None:
         """Trả về seq đầu tiên bị phá vỡ, hoặc None nếu toàn bộ chuỗi còn nguyên vẹn."""

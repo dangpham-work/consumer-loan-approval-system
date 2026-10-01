@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% from "_macros.html" import badge, csrf_field, errors with context %}
+{% block title %}Tài khoản nhân viên{% endblock %}
+{% block content %}
+<h1>Quản trị</h1>
+{% include "_admin_tabs.html" %}
+<section class="card">
+  <h2>Tài khoản nhân viên</h2>
+  <table class="table">
+    <thead><tr><th>Tên đăng nhập</th><th>Họ tên</th><th>Email</th><th>Chi nhánh</th><th>Vai trò</th><th>Trạng thái</th><th></th></tr></thead>
+    <tbody>
+    {% for s in staff %}
+    {% set label, tone = ACCOUNT_STATUS.get(s.status, (s.status, "neutral")) %}
+    <tr>
+      <td>{{ s.username }}</td>
+      <td>{{ s.full_name }}</td>
+      <td>{{ s.email }}</td>
+      <td>{{ s.branch }}</td>
+      <td>{{ s.roles | join(", ") }}</td>
+      <td>{{ badge(label, tone) }}</td>
+      <td class="row-actions"><a href="/app/admin/users/{{ s.user_id }}">Đổi vai trò</a></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+<section class="card">
+  <h2>Tạo tài khoản nhân viên</h2>
+  <p class="muted">Mật khẩu tạm được gửi tới email công việc; nhân viên phải đổi mật khẩu và đăng ký ứng dụng xác thực ở lần đăng nhập đầu tiên.</p>
+  {{ errors(error, field_errors or ()) }}
+  {% set f = form %}
+  <form method="post" action="/app/admin/users">
+    {{ csrf_field() }}
+    <label>Tên đăng nhập
+      <input name="username" value="{{ f.username or '' }}" maxlength="50" autocomplete="off" required>
+    </label>
+    <label>Họ tên
+      <input name="full_name" value="{{ f.full_name or '' }}" maxlength="100" required>
+    </label>
+    <label>Email công việc
+      <input type="email" name="email" value="{{ f.email or '' }}" maxlength="100" required>
+    </label>
+    <label>Chi nhánh
+      <input name="branch" value="{{ f.branch or '' }}" maxlength="50" required>
+    </label>
+    <fieldset>
+      <legend>Vai trò</legend>
+      {% for r in roles %}
+      <label class="check"><input type="checkbox" name="roles" value="{{ r.code }}"{% if r.code in (f.roles or ()) %} checked{% endif %}> {{ r.name }} ({{ r.code }})</label>
+      {% endfor %}
+    </fieldset>
+    {% include "_step_up.html" %}
+    <button type="submit">Tạo tài khoản</button>
+  </form>
+</section>
+{% endblock %}

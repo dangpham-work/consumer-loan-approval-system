@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% from "_macros.html" import badge, csrf_field, errors, masked, need_info_notice with context %}
+{% block title %}Hồ sơ vay {{ application.code or "" }}{% endblock %}
+{% block content %}
+{% set a = application.applicant %}
+{% set label, tone = STAFF_APPLICATION_STATUS.get(application.status, (application.status, "neutral")) %}
+<div class="heading">
+  <h1>Hồ sơ vay {{ application.code or "(nháp nộp hộ)" }}</h1>
+  {{ badge(label, tone) }}
+</div>
+{{ errors(error, field_errors or ()) }}
+{{ need_info_notice(application.need_info) }}
+{% if actions.sod_blocked %}
+<div class="alert alert-warn">Bạn đã tham gia một bước khác của hồ sơ vay này nên không được thực hiện bước tiếp theo (nguyên tắc phân tách nhiệm vụ, BR06).</div>
+{% elif actions.held_by_other %}
+<p class="alert">Hồ sơ vay đang do nhân viên khác xử lý.</p>
+{% endif %}
+{% if "LOAN_APPROVE" in user.permissions and application.status in ("PENDING_APPROVAL", "APPROVED", "REJECTED", "DISBURSED", "LOCKED") %}
+<p><a class="button" href="/app/queue/{{ application.id }}/approval">{{ "Phê duyệt hồ sơ vay" if application.status == "PENDING_APPROVAL" else "Lịch sử quyết định" }}</a></p>
+{% endif %}
+{% if "DISBURSE" in user.permissions and application.status in ("APPROVED", "DISBURSED", "LOCKED") %}
+<p><a class="button" href="/app/queue/{{ application.id }}/disbursement">{{ "Giải ngân" if application.status == "APPROVED" else "Xem giải ngân" }}</a></p>
+{% endif %}
+{% if "PAYMENT_RECORD" in user.permissions and application.status == "DISBURSED" %}
+<p><a class="button" href="/app/queue/{{ application.id }}/loan">Lịch trả nợ, thu tiền tại quầy</a></p>
+{% endif %}
+{% if application.status in ("DRAFT", "NEED_INFO") and application.created_by and application.created_by == user.employee_id %}
+<p><a class="button" href="/app/applications/{{ application.id }}/finance">Tiếp tục lập hồ sơ vay</a></p>
+{% endif %}
+
+<section class="card">
+  <h2>Khoản vay</h2>
+  <dl class="summary">
+    <dt>Số tiền vay</dt><dd>{{ application.requested_amount | money }}</dd>
+    <dt>Kỳ hạn</dt><dd>{{ application.term_months }} tháng</dd>
+    <dt>Mục đích</dt><dd>{{ PURPOSES.get(application.purpose, application.purpose) }}</dd>
+    <dt>Trả hằng tháng ước tính</dt><dd>{{ application.estimated_monthly_payment | money }}</dd>
+    <dt>Tài khoản nhận tiền</dt><dd>{{ application.receiving_account or "" }}</dd>
+    <dt>Ngày nộp</dt><dd>{{ application.submitted_at | moment }}</dd>
+  </dl>
+</section>
+
+<section class="card">
+  <h2>Khách hàng</h2>
+  {% set reveal_url = "/customers/" ~ application.customer_id ~ "/reveal-pii" if can_reveal else none %}
+  <dl class="summary">
+    <dt>Họ tên</dt><dd>{{ a.full_name }}</dd>
+    <dt>Số CCCD</dt><dd>{{ masked(a.national_id or "", reveal_url, "national_id") }}</dd>
+    <dt>Thu nhập hằng tháng</dt><dd>{{ masked("•••", reveal_url, "monthly_income") }}</dd>
+    <dt>Nghề nghiệp</dt><dd>{{ a.occupation or "" }}</dd>
+    <dt>Nơi làm việc</dt><dd>{{ a.employer or "" }}</dd>
+    <dt>Số năm làm việc</dt><dd>{{ a.employment_years if a.employment_years is not none else "" }}</dd>
+    <dt>Trả nợ hằng tháng hiện có</dt><dd>{{ application.existing_monthly_debt | money }}</dd>
+    <dt>Hình thức nhà ở</dt><dd>{{ HOUSING_TYPES.get(a.housing_type, "") if a.housing_type else "" }}</dd>
+    <dt>Địa chỉ</dt><dd>{{ a.address or "" }}</dd>
+  </dl>
+  {% if can_reveal %}<p class="muted">Mỗi lần bấm "Hiện" được ghi vào nhật ký kiểm toán (VIEW_PII).</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Giấy tờ</h2>
+  <table class="table">
+    <thead><tr><th>Giấy tờ</th><th>Tải lên</th><th>Kiểm tra</th>{% if actions.review %}<th>Đánh giá</th>{% endif %}</tr></thead>
+    <tbody>
+    {% for d in application.documents %}
+    <tr>
+      <td>{% if actions.appraise %}<a href="/app/queue/{{ application.id }}/documents/{{ d.id }}" target="_blank" rel="noopener">{{ DOCUMENT_TYPES.get(d.doc_type, d.doc_type) }}</a>{% else %}{{ DOCUMENT_TYPES.get(d.doc_type, d.doc_type) }}{% endif %}</td>
+      <td>{{ d.uploaded_at | moment }} · {{ (d.size_bytes / 1024) | round(0) | int }} KB</td>
+      <td>{% if d.review %}{% set v = VERDICTS.get(d.review.verdict, (d.review.verdict, "neutral")) %}{{ badge(v[0], v[1]) }}{% if d.review.note %} <span class="muted">{{ d.review.note }}</span>{% endif %}{% else %}<span class="muted">Chưa kiểm tra</span>{% endif %}</td>
+      {% if actions.review %}
+      <td>
+        <form method="post" action="/app/queue/{{ application.id }}/documents/{{ d.id }}/review" class="inline">
+          {{ csrf_field() }}
+          <select name="verdict" required>
+            {% for verdict in verdicts %}<option value="{{ verdict }}">{{ VERDICTS[verdict][0] }}</option>{% endfor %}
+          </select>
+          <input name="note" maxlength="200" placeholder="Ghi chú">
+          <button type="submit" class="secondary">Lưu</button>
+        </form>
+      </td>
+      {% endif %}
+    </tr>
+    {% else %}
+    <tr><td colspan="4" class="muted">Chưa có giấy tờ.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if actions.appraise %}<p class="muted">Giấy tờ mở trong trình xem có watermark tên bạn; mỗi lượt xem được ghi nhật ký (VIEW_PII).</p>{% endif %}
+</section>
+
+{% if actions.claim %}
+<section class="card">
+  <form method="post" action="/app/queue/{{ application.id }}/claim">
+    {{ csrf_field() }}
+    <button type="submit">Nhận xử lý</button>
+  </form>
+</section>
+{% endif %}
+
+{% if actions.review %}
+<section class="card">
+  <h2>Xác nhận hợp lệ</h2>
+  <p class="muted">Mọi giấy tờ phải được đánh giá Đạt.</p>
+  <form method="post" action="/app/queue/{{ application.id }}/verify" data-confirm="Xác nhận hồ sơ vay hợp lệ? Hồ sơ vay sẽ được chấm điểm tín dụng ngay.">
+    {{ csrf_field() }}
+    <button type="submit">Xác nhận hợp lệ</button>
+  </form>
+</section>
+{% endif %}
+
+{% if actions.request_info %}
+{% set info = info_form or {"message": "", "items": []} %}
+<section class="card">
+  <h2>Yêu cầu bổ sung</h2>
+  <form method="post" action="/app/queue/{{ application.id }}/request-info">
+    {{ csrf_field() }}
+    <fieldset>
+      <legend>Mục cần bổ sung</legend>
+      {% for item in info_items %}
+      <label class="check"><input type="checkbox" name="items" value="{{ item }}"{% if item in info["items"] %} checked{% endif %}> {{ ITEMS.get(item, item) }}</label>
+      {% endfor %}
+    </fieldset>
+    <label>Lời nhắn cho khách hàng
+      <textarea name="message" minlength="10" maxlength="500" required>{{ info["message"] }}</textarea>
+    </label>
+    <button type="submit" class="secondary">Gửi yêu cầu bổ sung</button>
+  </form>
+</section>
+{% endif %}
+
+{% if actions.open_appraisal %}
+<section class="card">
+  <form method="post" action="/app/queue/{{ application.id }}/appraisal/open">
+    {{ csrf_field() }}
+    <button type="submit">Nhận thẩm định</button>
+  </form>
+</section>
+{% endif %}
+
+{% include "_score.html" %}
+
+{% if actions.appraise %}
+{% set p = proposal %}
+<section class="card">
+  <h2>Lập tờ trình</h2>
+  <form method="post" action="/app/queue/{{ application.id }}/appraisal" data-dti-url="/applications/{{ application.id }}/appraisal/dti">
+    {{ csrf_field() }}
+    <fieldset>
+      <legend>Đề xuất</legend>
+      {% for code, text in RECOMMENDATIONS.items() %}
+      <label class="check"><input type="radio" name="recommendation" value="{{ code }}"{% if p.recommendation == code %} checked{% endif %} required> {{ text }}</label>
+      {% endfor %}
+    </fieldset>
+    <label>Hạn mức đề xuất (đồng, tối đa {{ application.requested_amount | money }})
+      <input type="number" name="proposed_amount" value="{{ p.proposed_amount }}" min="5000000" max="{{ application.requested_amount }}" step="1">
+    </label>
+    <label>Kỳ hạn đề xuất (tháng)
+      <input type="number" name="proposed_term" value="{{ p.proposed_term }}" min="6" max="36">
+    </label>
+    <p>DTI với đề xuất này: <strong data-dti-output>{% if preview %}{{ preview.dti | percent }}{% if not preview.within_limit %} (vượt 50%){% endif %}{% else %}—{% endif %}</strong>
+      · Trả hằng tháng: <strong data-payment-output>{% if preview %}{{ preview.monthly_payment | money }}{% else %}—{% endif %}</strong></p>
+    <label class="check"><input type="checkbox" name="fraud_suspected" value="true"{% if p.fraud_suspected %} checked{% endif %}> Nghi ngờ gian lận (mô tả trong nhận xét)</label>
+    <label>Nhận xét (ít nhất 20 ký tự)
+      <textarea name="comment" maxlength="1000">{{ p.comment }}</textarea>
+    </label>
+    <div class="actions">
+      <button type="submit" name="action" value="preview" class="secondary">Tính lại DTI</button>
+      <button type="submit" name="action" value="submit">Nộp tờ trình</button>
+    </div>
+  </form>
+</section>
+{% endif %}
+
+{% if report %}
+<section class="card">
+  <h2>Tờ trình thẩm định</h2>
+  <dl class="summary">
+    <dt>Đề xuất</dt><dd>{{ RECOMMENDATIONS.get(report.recommendation, report.recommendation) }}</dd>
+    {% if report.proposed_amount is not none %}<dt>Hạn mức đề xuất</dt><dd>{{ report.proposed_amount | money }}</dd>{% endif %}
+    {% if report.proposed_term is not none %}<dt>Kỳ hạn đề xuất</dt><dd>{{ report.proposed_term }} tháng</dd>{% endif %}
+    {% if report.dti is not none %}<dt>DTI</dt><dd>{{ report.dti | percent }}</dd>{% endif %}
+    <dt>Nghi ngờ gian lận</dt><dd>{{ "Có" if report.fraud_suspected else "Không" }}</dd>
+    <dt>Nhận xét</dt><dd>{{ report.comment }}</dd>
+    <dt>Lập lúc</dt><dd>{{ report.created_at | moment }}</dd>
+  </dl>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Tiến trình</h2>
+  <ol class="timeline">
+    {% for change in application.history %}
+    <li><span class="muted">{{ change.at | moment }}</span> {{ STAFF_APPLICATION_STATUS.get(change.status, (change.status, ""))[0] }}</li>
+    {% endfor %}
+  </ol>
+</section>
+<p><a href="/app/queue">Về hàng đợi</a></p>
+{% endblock %}

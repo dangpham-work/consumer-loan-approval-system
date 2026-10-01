@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% from "_macros.html" import badge, csrf_field, errors with context %}
+{% block title %}Vai trò của {{ member.username }}{% endblock %}
+{% block content %}
+{% set label, tone = ACCOUNT_STATUS.get(member.status, (member.status, "neutral")) %}
+<div class="heading">
+  <h1>Vai trò của {{ member.username }}</h1>
+  {{ badge(label, tone) }}
+</div>
+{% include "_admin_tabs.html" %}
+<section class="card">
+  <dl class="summary">
+    <dt>Họ tên</dt><dd>{{ member.full_name }}</dd>
+    <dt>Email</dt><dd>{{ member.email }}</dd>
+    <dt>Chi nhánh</dt><dd>{{ member.branch }}</dd>
+    <dt>Vai trò hiện tại</dt><dd>{{ member.roles | join(", ") }}</dd>
+  </dl>
+  {{ errors(error, field_errors or ()) }}
+  <form method="post" action="/app/admin/users/{{ member.user_id }}/roles">
+    {{ csrf_field() }}
+    <fieldset>
+      <legend>Vai trò</legend>
+      {% for r in roles %}
+      <label class="check"><input type="checkbox" name="roles" value="{{ r.code }}"{% if r.code in chosen %} checked{% endif %}> {{ r.name }} ({{ r.code }})</label>
+      {% endfor %}
+    </fieldset>
+    <p class="muted">Vai trò ADMIN không kết hợp được với vai trò nghiệp vụ cho vay; quản trị viên không tự gán vai trò nghiệp vụ cho chính mình.</p>
+    {% include "_step_up.html" %}
+    <div class="actions">
+      <a class="button secondary" href="/app/admin">Quay lại</a>
+      <button type="submit">Lưu vai trò</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

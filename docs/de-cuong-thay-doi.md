@@ -73,7 +73,7 @@ Kết quả phiên hỏi đáp rà soát đề cương `De_cuong_OOAD_Vay_tin_du
 - [ ] **`customers.employer`**: thêm cột nơi làm việc (M03 bước 2 có trường này nhưng lược đồ 4.1.2d không có).
 - [ ] **Số tiền trả hằng tháng ước tính (M03 bước 1)**: tính theo lãi suất trần 28%/năm (hạng C), vì lúc lập hồ sơ vay chưa có Hạng.
 - [ ] **Nộp hồ sơ vay**: bắt buộc đủ thông tin bước 2 (trừ nơi làm việc) và cả 4 loại giấy tờ (CCCD 2 mặt, chứng minh thu nhập, hóa đơn điện/nước). CCCD không đổi được nữa khi khách hàng đã từng nộp một hồ sơ vay.
-- [ ] **Màn hình Jinja2** (M01, M03, M09) chưa làm trong ticket #3, #4: mới có API.
+- [x] **Màn hình Jinja2** (M03, M09) chưa làm trong ticket #3, #4: mới có API. M01 làm ở ticket #22, M02 và M03 ở ticket #23, M09 ở ticket #27.
 
 ## Phát sinh khi cài đặt (ticket #5)
 
@@ -140,7 +140,7 @@ Kết quả phiên hỏi đáp rà soát đề cương `De_cuong_OOAD_Vay_tin_du
 
 ## Phát sinh khi cài đặt (ticket #16)
 
-- [ ] **Màn hình M09** mở rộng có API: `GET /admin/roles`, `GET /admin/permissions` (bảng quyền hiện có), `POST /admin/roles` (tạo vai trò kèm tập quyền ban đầu), `PUT /admin/roles/{code}/permissions` (đổi tập quyền), `GET /admin/policies`, `POST /admin/policies` (lưu phiên bản chính sách mới). Cả bốn thao tác ghi đều yêu cầu step-up OTP (UC02) như UC04.
+- [x] **Màn hình M09** (trang web ở ticket #27) mở rộng có API: `GET /admin/roles`, `GET /admin/permissions` (bảng quyền hiện có), `POST /admin/roles` (tạo vai trò kèm tập quyền ban đầu), `PUT /admin/roles/{code}/permissions` (đổi tập quyền), `GET /admin/policies`, `POST /admin/policies` (lưu phiên bản chính sách mới). Cả bốn thao tác ghi đều yêu cầu step-up OTP (UC02) như UC04.
 - [ ] **UC05 bước 4 (quy tắc xung đột quyền)**: cụ thể hóa "ví dụ" trong đề cương thành một nhóm cố định `{APPRAISAL_SUBMIT, LOAN_APPROVE, DISBURSE}` (dây chuyền thẩm định → phê duyệt → giải ngân của BR06): một vai trò không được giữ từ hai quyền trở lên trong nhóm này. Không làm bảng cặp quyền xung đột cấu hình được vì đề cương không yêu cầu và ma trận RBAC vốn đã cố định theo migration.
 - [ ] **UC05**: tạo vai trò (`POST /admin/roles`) nhận luôn tập quyền ban đầu trong một lần gọi, không tách bước "tạo vai trò trống rồi gán quyền" vì đề cương mô tả một luồng chính duy nhất cho cả hai trường hợp. Chưa làm xóa vai trò (không có trong luồng UC05).
 - [ ] **UC06**: `POST /admin/policies` kiểm tra các khoảng hạn mức (phủ kín 5–100 triệu, không chồng lấn, không bị hở, BR05) trước khi lưu; sai thì 400 và không ghi gì. Lưu thành công thì tạo `approval_policies` phiên bản mới (số phiên bản tự tăng) và vô hiệu hóa phiên bản trước đó trong cùng giao dịch (chỉ mục lọc `is_active`). Chưa làm `approver_role_id` (đã ghi ở ticket #7: chỉ có một vai trò phê duyệt).
@@ -168,7 +168,7 @@ Kết quả phiên hỏi đáp rà soát đề cương `De_cuong_OOAD_Vay_tin_du
 
 ## Phát sinh khi cài đặt (ticket #12)
 
-- [ ] **Màn hình M04** có API: `GET /loans/{id}/schedule` (bảng kỳ, dư nợ gốc, số tiền cần thanh toán hiện tại gồm cả phí phạt của các kỳ đã đến hạn, kỳ kế tiếp), `GET /loans/{id}/schedule/pdf` (lịch trả nợ PDF, cùng kiểu hợp đồng ở ticket #10: chữ bỏ dấu) và `POST /loans/{id}/payments`. Dùng lại quyền `PAYMENT_RECORD` (Khách hàng, NV tín dụng), không thêm quyền mới; khách hàng chỉ thấy khoản vay của mình (khoản vay người khác trả 404).
+- [x] **Màn hình M04** (trang web ở ticket #24) có API: `GET /loans/{id}/schedule` (bảng kỳ, dư nợ gốc, số tiền cần thanh toán hiện tại gồm cả phí phạt của các kỳ đã đến hạn, kỳ kế tiếp), `GET /loans/{id}/schedule/pdf` (lịch trả nợ PDF, cùng kiểu hợp đồng ở ticket #10: chữ bỏ dấu) và `POST /loans/{id}/payments`. Dùng lại quyền `PAYMENT_RECORD` (Khách hàng, NV tín dụng), không thêm quyền mới; khách hàng chỉ thấy khoản vay của mình (khoản vay người khác trả 404).
 - [ ] **Kênh thanh toán suy ra từ loại người dùng**, không do client gửi: Khách hàng luôn ONLINE qua cổng thanh toán giả lập; NV tín dụng luôn COUNTER, bắt buộc mã phiếu thu (lưu vào `external_ref`), không gọi cổng. Để khách hàng không tự khai "đã nộp tại quầy".
 - [ ] **Bảng mới `payments`** (`external_ref` UNIQUE: mã giao dịch cổng hoặc mã phiếu thu) và **`payment_allocations`** (khoản thanh toán, kỳ, thành phần PENALTY/INTEREST/PRINCIPAL, số tiền) để tra cứu phân bổ. **`installments.penalty_paid`**: phần `paid_amount` đã trả phí phạt, lưu riêng vì phí phạt tính lại mỗi đêm có thể phát sinh sau khi kỳ đã được trả một phần.
 - [ ] **UC28 bước 4**: phân bổ theo kỳ tăng dần, mỗi kỳ trả hết phí phạt → lãi → gốc rồi mới sang kỳ sau; nhiều kỳ quá hạn thì kỳ cũ nhất trả hết trước. Trả thừa tự chuyển thành trả trước cho kỳ sau (Q18). Tổng vượt quá tổng còn lại của mọi kỳ thì 400: lịch trả nợ không đổi sau khi giải ngân, giảm gốc trước hạn là Tất toán (ticket #14).
@@ -194,7 +194,7 @@ Kết quả phiên hỏi đáp rà soát đề cương `De_cuong_OOAD_Vay_tin_du
 - [ ] **Phí trả trước hạn**: tỷ lệ lấy theo phiên bản chính sách phê duyệt hồ sơ vay đã chốt (ADR 0001), tính trên dư nợ gốc còn lại. BR10: miễn khi mọi kỳ trừ kỳ cuối đã đến hạn, hoặc không còn kỳ nào chưa đến hạn.
 - [ ] **UC31 bước 3–4**: `POST /loans/{id}/settlement` (số tiền, `quoted_on`, mã phiếu thu hoặc `idempotency_key` như UC28) thu tiền và chống ghi nhận trùng như UC28. Đủ số tiền tất toán thì kỳ đã đến hạn thành PAID, các kỳ còn lại CANCELLED, khoản vay SETTLED (3.4b T06, T07), ghi `LOAN_SETTLE` và `LOAN_STATUS_CHANGE`, gửi xác nhận tất toán (`LOAN_SETTLED`). Phí trả trước hạn là thành phần phân bổ mới `FEE` (migration 0012).
 - [ ] **UC31 2a**: `quoted_on` khác hôm nay thì 409, không thu tiền. **3a**: số tiền nhỏ hơn số tiền tất toán thì ghi nhận như thanh toán kỳ thông thường; lớn hơn thì 400. Khoản vay BAD_DEBT hoặc SETTLED thì 409, như UC28.
-- [ ] **Màn hình**: dự án chưa có tầng Jinja2 (M04), nên ticket này chỉ gồm API.
+- [x] **Màn hình**: ticket này chỉ gồm API; báo giá và tất toán trên M04 làm ở ticket #24.
 
 ## Phát sinh khi cài đặt (ticket #18)
 
@@ -202,4 +202,65 @@ Kết quả phiên hỏi đáp rà soát đề cương `De_cuong_OOAD_Vay_tin_du
 - [ ] **Phạm vi tổng hợp**: hồ sơ vay tính theo `submitted_at` trong kỳ (số hồ sơ theo trạng thái, tỷ lệ duyệt/từ chối, thời gian xử lý trung bình từ nộp đến quyết định đầu tiên trong `application_status_history`); khoản vay (dư nợ, nhóm nợ, tỷ lệ quá hạn) tính trên các khoản giải ngân trong kỳ (`disbursed_at`), lấy `outstanding_principal`/`debt_group` hiện tại — hệ thống không lưu lịch sử dư nợ theo thời điểm nên không dựng lại được đúng số dư tại `to`.
 - [ ] **`GET /reports/statistics/export`** (`format=CSV|PDF`, mặc định CSV): ghi log `REPORT_EXPORT`. "Excel" cài đặt bằng CSV có BOM UTF-8 để Excel đọc đúng tiếng Việt (cùng cách làm CSV của ticket #15, không thêm phụ thuộc xlsx); PDF dùng fpdf2, chữ bỏ dấu như hợp đồng (ticket #10). Báo cáo chỉ có số liệu tổng hợp (đếm, tổng tiền, tỷ lệ), không có tên khách hàng hay mã hồ sơ vay (SR07).
 - [ ] **Không có bảng mới**: mọi chỉ tiêu tính trực tiếp từ các bảng đã có (`loan_applications`, `application_status_history`, `disbursements`, `loans`, `credit_scores`).
-- [ ] **Màn hình**: dự án chưa có tầng Jinja2, nên ticket này chỉ gồm API (như ticket #14).
+- [x] **Màn hình**: ticket này chỉ gồm API (như ticket #14); màn hình M11 làm ở ticket #28.
+
+## Phát sinh khi cài đặt (ticket #22)
+
+- [ ] **Đường dẫn trang HTML**: mọi trang nằm dưới `/app` (đăng nhập `/app/login`, trang chủ `/app`, `/` chuyển hướng về `/app`) để không trùng đường dẫn REST API. Tầng giao diện (`loan_system/web`) gọi thẳng tầng dịch vụ và dùng chung cookie phiên với API; test qua TestClient trên các trang HTML, cùng seam với REST API.
+- [ ] **CSRF**: kiểu double-submit, cookie `csrf` ngẫu nhiên (HttpOnly, Secure, SameSite=Strict) và trường ẩn `csrf` trong mọi biểu mẫu POST; thiếu hoặc sai thì 403. Nút "Hiện" và "Tiếp tục làm việc" gọi REST API bằng `fetch`, dựa vào cookie phiên SameSite=Strict như các lời gọi API khác.
+- [ ] **Menu theo vai trò**: mỗi mục gắn một quyền (và loại tài khoản nếu cần): Nộp hồ sơ vay và Khoản vay của tôi cho Khách hàng, Hàng đợi hồ sơ vay (`APPLICATION_VIEW`) cho nhân viên, Quản trị (`USER_MANAGE`), Nhật ký kiểm toán (`AUDIT_VIEW`), Báo cáo thống kê (`REPORT_VIEW`). M06, M07, M08 mở từ hàng đợi (M05), không có mục riêng. Trang chủ tạm thời chỉ chào người dùng; M02 và M05 thay trang này ở ticket #23, #25 (đã làm).
+- [ ] **Đếm ngược hết phiên**: cảnh báo 2 phút trước khi hết 15 phút không hoạt động (SR11), nút "Tiếp tục làm việc" gọi `GET /auth/session` để gia hạn; hết giờ thì chuyển về màn hình đăng nhập.
+- [ ] **Trang lỗi**: 400/403/404/409/429 dưới `/app` hiện trang lỗi chung, không lộ chi tiết kỹ thuật; đường dẫn ngoài `/app` vẫn trả JSON như cũ. Chưa đăng nhập hoặc phiên hết hạn thì chuyển về `/app/login` kèm thông báo. Thông báo góc trên chọn bằng khóa cố định (`?notice=`), không hiển thị chuỗi tùy ý từ URL.
+- [ ] **UC03**: mới có đổi mật khẩu tạm khi đăng nhập lần đầu. Tầng nghiệp vụ chưa có đổi mật khẩu thường và quên mật khẩu, nên M01 chưa có hai chức năng này. Đăng ký TOTP hiện khóa dạng chữ và URI `otpauth://`, chưa có mã QR vì chưa có thư viện tạo QR.
+
+## Phát sinh khi cài đặt (ticket #23)
+
+- [ ] **Đường dẫn M02, M03**: trang chủ khách hàng là `/app`. Biểu mẫu 4 bước dùng mỗi bước một trang: `/app/applications/new` (bước 1, tạo bản nháp), rồi `/app/applications/{id}/loan`, `/finance`, `/documents`, `/confirm`. Chi tiết và dòng thời gian trạng thái (UC16) ở `/app/applications/{id}`, nút hủy (UC17) ở đó, có hộp thoại xác nhận. Mỗi bước lưu ngay vào bản nháp, nên khách hàng có thể dừng giữa chừng rồi tiếp tục từ trang chủ.
+- [ ] **Bổ sung hồ sơ vay (UC15)**: dùng lại các bước 2 đến 4. Chỉ hiện ô nhập và nút tải lên cho những mục nhân viên tín dụng đã yêu cầu; bước 1 bị khóa vì số tiền, kỳ hạn, mục đích không thuộc danh sách được yêu cầu bổ sung.
+- [ ] **Số CCCD và số tài khoản nhận** luôn hiển thị đã che, kể cả với chính khách hàng. Ô nhập để trống nghĩa là giữ giá trị đã khai.
+- [ ] **Số tiền trả hằng tháng ước tính** ở bước 1 tính ngay trên trình duyệt (JavaScript, chỉ để tham khảo). Từ bước 2 trở đi hiển thị giá trị máy chủ tính bằng `Decimal`.
+- [ ] **Trạng thái Bị khóa** hiển thị cho khách hàng là "Đang xử lý": không để lộ việc hồ sơ vay đang bị điều tra.
+- [ ] **Kỳ đến hạn tiếp theo trên M02**: thêm `PaymentService.own_loans` (các Khoản vay chưa tất toán của khách hàng) và trường `next_due_amount` (số tiền còn phải trả của kỳ kế tiếp) trong `ScheduleView`. REST API `/loans/{id}/schedule` giữ nguyên.
+- [ ] **Cập nhật thông tin cá nhân (UC10)** ở `/app/profile`, thêm mục menu "Thông tin cá nhân". Chỉ sửa được các trường như `PATCH /customers/me`. Đổi số điện thoại hoặc email cần OTP, chưa làm trên giao diện.
+- [ ] **Lỗi nghiệp vụ trên trang HTML**: các lỗi đã ánh xạ ở `api/errors.py` (ví dụ không tìm thấy hồ sơ vay, ST01) hiện trang lỗi chung với cùng thông điệp khi xảy ra dưới `/app`. Lỗi của biểu mẫu (dữ liệu không hợp lệ, còn thiếu mục, file sai định dạng, trùng CCCD) hiện ngay trên biểu mẫu.
+
+## Phát sinh khi cài đặt (ticket #25)
+
+- [ ] **Đường dẫn M05, M06**: hàng đợi ở `/app/queue`. Nhân viên có `APPLICATION_VIEW` đăng nhập xong vào thẳng hàng đợi tại `/app`; Quản trị viên, Kiểm soát viên vẫn thấy trang chào. Chi tiết hồ sơ vay (M06) ở `/app/queue/{id}`: một trang chung cho mọi vai trò, chỉ hiện các thao tác người xem được làm (nhận xử lý, đánh giá giấy tờ, xác nhận hợp lệ, yêu cầu bổ sung, nhận thẩm định, lập tờ trình). M07, M08 (ticket #26) là trang riêng, mở bằng nút trên trang này.
+- [ ] **Hàng đợi mặc định "Việc cần làm"** theo quyền: `APPLICATION_VERIFY` thấy Đã nộp, `APPRAISAL_SUBMIT` thấy Đang thẩm định, `LOAN_APPROVE` thấy Chờ phê duyệt, `DISBURSE` thấy Đã phê duyệt. Lọc được theo từng trạng thái hoặc "Tất cả", và tìm theo mã hồ sơ vay hoặc họ tên khách hàng. Danh sách hồ sơ vay (`ApplicationSummary`) có thêm họ tên khách hàng; REST API `GET /applications` giữ nguyên.
+- [ ] **Nhân viên thấy trạng thái Bị khóa** đúng tên (khách hàng vẫn thấy "Đang xử lý").
+- [ ] **Che dữ liệu trên M06**: CCCD và thu nhập luôn che, kể cả với chuyên viên thẩm định. Người có `CUSTOMER_VIEW_PII` bấm "Hiện" (gọi `POST /customers/{id}/reveal-pii`) mới thấy đầy đủ, mỗi lần bấm ghi `VIEW_PII`. Vì vậy trang web mở thẩm định bằng `AppraisalService.open(..., reveal=False)`: chỉ nhận thẩm định, không ghi `VIEW_PII`. REST API `POST /applications/{id}/appraisal/open` giữ nguyên (trả đầy đủ và ghi `VIEW_PII`).
+- [ ] **ST03 trên giao diện**: tính trước các bước người xem đã tham gia (Người tạo, Người tiếp nhận, trường mới `appraised_by` trong `ApplicationView`, không có trong REST API) để ẩn thao tác vi phạm phân tách nhiệm vụ, kèm lời giải thích. Gửi thẳng yêu cầu thì tầng nghiệp vụ vẫn chặn (403, ghi `SOD_VIOLATION`).
+- [ ] **DTI trên tờ trình**: đổi hạn mức hoặc kỳ hạn thì JavaScript gọi `GET /applications/{id}/appraisal/dti` để tính lại. Không có JavaScript thì bấm nút "Tính lại DTI". Tờ trình đã nộp hiển thị cho người có `CREDIT_SCORE_VIEW` (thêm `AppraisalService.report`).
+- [ ] **Trình xem giấy tờ** ở `/app/queue/{id}/documents/{docId}`: nội dung nhúng thẳng vào trang, nên mỗi lần mở là đúng một lượt `VIEW_PII`. Ảnh đã in watermark ở máy chủ; PDF được phủ watermark bằng CSS. Trang trả `Cache-Control: no-store`. NV tín dụng vẫn chưa xem được nội dung giấy tờ khi kiểm tra (UC14) vì không có `CUSTOMER_VIEW_PII`, chỉ thấy loại, kích thước, thời điểm tải lên.
+- [ ] **Nộp hộ trên giao diện (UC12 1a)** ở `/app/counter` (mục menu "Nộp hộ hồ sơ vay"): tìm khách hàng theo CCCD (`CUSTOMER_VIEW`) hoặc lập khách vãng lai. Khách vãng lai xác nhận đồng ý bằng OTP. Sau đó NV đi qua các bước 1–3 của M03 như khách hàng. Ở bước 4, khách hàng đọc mã OTP để đồng ý nộp hồ sơ vay, thay cho ô đánh dấu.
+
+## Phát sinh khi cài đặt (ticket #26)
+
+- [ ] **Đường dẫn M07, M08**: `/app/queue/{id}/approval` (quyền `LOAN_APPROVE`) và `/app/queue/{id}/disbursement` (quyền `DISBURSE`), mở bằng nút trên M06 khi hồ sơ vay ở trạng thái phù hợp. M07 vẫn mở được sau khi đã quyết định để xem lịch sử quyết định.
+- [ ] **M07**: tóm tắt tờ trình, điểm tín dụng và CIC (dùng chung khối `_score.html` với M06), lịch sử quyết định (quyết định trên tờ trình cũ ghi "tờ trình cũ"), "Cần N – đã có M". Nút Duyệt chỉ hiện khi tờ trình đề xuất duyệt, có hộp thoại xác nhận. Từ chối, Trả về cần lý do ≥ 10 ký tự. `can_decide` sai thì ẩn cả ba nút kèm lời giải thích; gửi thẳng biểu mẫu vẫn bị chặn (403, `SOD_VIOLATION`). Phiên bản đã cũ (409) thì trang báo lỗi, ẩn các nút và có liên kết "Tải lại trang".
+- [ ] **M08** hiện theo trạng thái. Đã phê duyệt: khối toàn vẹn xanh, thông tin chuyển tiền (tài khoản đã che), ô mã TOTP, hộp thoại xác nhận. Bị khóa (kể cả ngay khi mở trang mà snapshot không khớp, ST04): khối toàn vẹn đỏ, không có ô giải ngân. Lệnh giải ngân bị từ chối: báo "Giải ngân thất bại" và nút hủy hồ sơ vay để lập lại. Lệnh đang chờ: báo đang chờ, gửi lại dùng đúng lệnh cũ. Đã giải ngân: mã giao dịch, khoản vay, SHA-256 hợp đồng, lịch trả nợ và nút tải hợp đồng PDF.
+- [ ] **API bổ sung**: `GET /applications/{id}/disbursement` có thêm trường `failed` (đã có lệnh bị từ chối). Mới có `GET /applications/{id}/contract` (quyền `DISBURSE`, trả hợp đồng PDF, 409 khi chưa giải ngân); trang web tải cùng nội dung ở `/app/queue/{id}/contract`. Khách hàng tải hợp đồng ở màn hình khoản vay (chưa làm).
+- [ ] **Nút Giải ngân trên M06** hiện với mọi người có `DISBURSE` khi hồ sơ vay Đã phê duyệt; người đã tham gia các bước trước mở M08 thì bị chặn (403, `SOD_VIOLATION`), vì M06 không có danh sách Quản lý đã phê duyệt để ẩn nút trước.
+
+## Phát sinh khi cài đặt (ticket #24)
+
+- [ ] **Đường dẫn M04**: khách hàng mở danh sách khoản vay chưa tất toán ở `/app/loans` (mục menu "Khoản vay của tôi", liên kết từ trang chủ) rồi `/app/loans/{id}`. NV tín dụng mở M04 bằng nút trên M06 khi hồ sơ vay Đã giải ngân: `/app/queue/{id}/loan` chuyển tới khoản vay sinh ra từ hồ sơ vay đó (thêm `PaymentService.loan_of_application`). Lịch trả nợ PDF tải ở `/app/loans/{id}/schedule.pdf` (`Cache-Control: no-store`). Khoản vay của người khác báo 404; vai trò không có `PAYMENT_RECORD` báo 403.
+- [ ] **Thanh toán trên M04**: khách hàng thanh toán trực tuyến, biểu mẫu mang sẵn `idempotency_key` ngẫu nhiên cho lượt thanh toán đó; gửi lại cùng biểu mẫu chỉ bị thu một lần. Cổng thanh toán từ chối thì trang cấp khóa mới (cổng nhớ kết quả theo khóa, gửi lại cùng khóa sẽ bị từ chối mãi); cổng không phản hồi hoặc nhập sai thì giữ khóa cũ vì tiền có thể đã được thu. NV tín dụng ghi nhận tiền mặt tại quầy, bắt buộc mã phiếu thu, không có khóa.
+- [ ] **Tất toán trên M04**: người có `LOAN_SETTLE` thấy báo giá trong ngày (gốc, lãi đã đến hạn, lãi phát sinh, phí phạt, phí trả trước hạn, tổng) và nút Tất toán có hộp thoại xác nhận; biểu mẫu gửi đúng số tiền và ngày của báo giá đang xem. Báo giá của ngày khác thì 409, trang báo "Vui lòng xem lại số tiền tất toán" kèm báo giá mới. Khoản vay đã tất toán chỉ còn bảng kỳ (các kỳ còn lại "Đã hủy"). Bấm Tất toán (hoặc trả hết) hai lần thì yêu cầu thứ hai thấy khoản vay đã tất toán: trang báo "Đã tất toán khoản vay" thay vì báo lỗi, tiền chỉ bị thu một lần.
+- [ ] **Khách hàng tải hợp đồng PDF** (ticket #26 để lại) vẫn chưa làm: M04 chỉ có lịch trả nợ PDF.
+
+## Phát sinh khi cài đặt (ticket #27)
+
+- [ ] **Đường dẫn M09**: ba thẻ `/app/admin` (tài khoản nhân viên, cần `USER_MANAGE`), `/app/admin/roles` (vai trò – quyền, `ROLE_MANAGE`), `/app/admin/policies` (chính sách phê duyệt, `POLICY_CONFIGURE`); đổi vai trò một nhân viên ở `/app/admin/users/{id}`, đổi quyền một vai trò ở `/app/admin/roles/{code}`. Thêm `StaffService.list_staff` và `StaffService.get` (danh sách tài khoản nhân viên kèm vai trò, UC04 bước 1): REST API chưa có endpoint liệt kê nhân viên.
+- [ ] **Step-up trên M09**: mỗi biểu mẫu ghi có ô mã TOTP; kiểm tra dữ liệu bằng schema của REST API trước, rồi mới xác thực lại TOTP (nhập sai dữ liệu không tốn một lần sai OTP), rồi mới lưu. Sai mã thì 403 và giữ lại các ô đã nhập; sai quá số lần cho phép thì phiên bị hủy như REST API.
+- [ ] **Bảng chính sách trên M09**: lãi suất và phí trả trước hạn nhập theo phần trăm (19 hoặc 19,5), trang đổi sang tỷ lệ như REST API nhận; biểu mẫu điền sẵn từ phiên bản đang hiệu lực, thêm hai hàng hạn mức trống, hàng để trống cả ba ô thì bỏ qua. Lưu có hộp thoại xác nhận vì phiên bản mới có hiệu lực ngay.
+- [ ] **Đường dẫn M10**: `/app/audit` (cần `AUDIT_VIEW`), 50 bản ghi mỗi trang, mới nhất trước. Lọc theo khoảng ngày (giờ Việt Nam, tính trọn ngày ở hai đầu), người thực hiện theo tên đăng nhập (thêm `AuditQueryService.actor_id` và `usernames`; bảng hiện tên đăng nhập thay cho mã định danh, bản ghi không có người thực hiện hiện "Hệ thống"), hành động và mức độ. Nhập sai bộ lọc thì 400 kèm thông báo. "Xuất CSV" (`/app/audit/export`) dùng đúng bộ lọc đang xem, cùng định dạng và giới hạn dòng với REST API.
+- [ ] **Kiểm tra toàn vẹn trên M10**: nút "Kiểm tra toàn vẹn chuỗi" (POST `/app/audit/verify`, cần `AUDIT_VERIFY`) duyệt lại toàn bộ chuỗi băm và báo "toàn vẹn" hoặc số của bản ghi đầu tiên bị phá vỡ (ST08 qua giao diện: sửa thẳng một bản ghi bằng tài khoản quản trị CSDL thì trang chỉ ra đúng bản ghi đó). Lần kiểm tra không ghi nhật ký, như REST API.
+- [ ] **Menu "Quản trị"** dẫn tới thẻ M09 đầu tiên người dùng được mở (`USER_MANAGE`, `ROLE_MANAGE` hoặc `POLICY_CONFIGURE`), để vai trò tùy biến chỉ có quyền chính sách vẫn vào được M09.
+
+## Phát sinh khi cài đặt (ticket #28)
+
+- [ ] **Đường dẫn M11**: `/app/reports?from=…&to=…`, mặc định từ ngày 1 của tháng hiện tại đến hôm nay (giờ Việt Nam). Ngày sai định dạng, ngày kết thúc trước ngày bắt đầu hoặc quá 12 tháng thì 400, hiện thông điệp ngay trên trang và giữ khoảng đã nhập (cùng thông điệp với REST API).
+- [ ] **Biểu đồ** vẽ bằng thanh CSS (độ dài theo giá trị lớn nhất của biểu đồ), không thêm thư viện JavaScript: hồ sơ vay theo trạng thái, khoản vay theo nhóm nợ, hồ sơ vay theo hạng tín dụng. Ô số liệu: tổng hồ sơ vay, tỷ lệ duyệt/từ chối, thời gian xử lý trung bình, tổng giải ngân, dư nợ gốc, tỷ lệ quá hạn; tỷ lệ không tính được (không có dữ liệu) hiện "Chưa có dữ liệu" thay vì 0%.
+- [ ] **Xuất CSV/PDF** ở `/app/reports/export?from=…&to=…&format=CSV|PDF`, đúng khoảng đang xem, ghi `REPORT_EXPORT` như REST API. Khoảng sai thì hiện lại M11 kèm thông điệp, không ghi log.

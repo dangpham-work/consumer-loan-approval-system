@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% from "_macros.html" import badge, csrf_field, errors with context %}
+{% block title %}Chính sách phê duyệt{% endblock %}
+{% block content %}
+<h1>Quản trị</h1>
+{% include "_admin_tabs.html" %}
+{% set f = form %}
+<section class="card">
+  <h2>Lưu phiên bản chính sách mới</h2>
+  <p class="muted">Chính sách được lưu thành phiên bản mới, bản cũ giữ nguyên. Hồ sơ vay đã chờ phê duyệt giữ phiên bản của nó; chỉ hồ sơ vay vào chờ phê duyệt sau khi lưu mới dùng phiên bản này. Các khoảng hạn mức phải phủ kín từ 5.000.000 đến 100.000.000 đ, không chồng lấn, không hở.</p>
+  {{ errors(error, field_errors or ()) }}
+  <form method="post" action="/app/admin/policies" data-confirm="Lưu phiên bản chính sách mới và áp dụng ngay?">
+    {{ csrf_field() }}
+    <fieldset>
+      <legend>Lãi suất theo hạng (%/năm) và phí trả trước hạn (% dư nợ gốc)</legend>
+      <label>Hạng A <input name="rate_grade_a" value="{{ f.rate_grade_a or '' }}" inputmode="decimal" maxlength="6" required></label>
+      <label>Hạng B <input name="rate_grade_b" value="{{ f.rate_grade_b or '' }}" inputmode="decimal" maxlength="6" required></label>
+      <label>Hạng C <input name="rate_grade_c" value="{{ f.rate_grade_c or '' }}" inputmode="decimal" maxlength="6" required></label>
+      <label>Phí trả trước hạn <input name="prepayment_fee_rate" value="{{ f.prepayment_fee_rate or '' }}" inputmode="decimal" maxlength="6" required></label>
+    </fieldset>
+    <table class="table">
+      <thead><tr><th>Từ (đ)</th><th>Đến (đ)</th><th>Số người phê duyệt</th></tr></thead>
+      <tbody>
+      {% for low, high, approvals in f.tiers %}
+      <tr>
+        <td><input name="tier_min" value="{{ low }}" inputmode="numeric" maxlength="12" aria-label="Từ"></td>
+        <td><input name="tier_max" value="{{ high }}" inputmode="numeric" maxlength="12" aria-label="Đến"></td>
+        <td><input name="tier_approvals" value="{{ approvals }}" inputmode="numeric" maxlength="2" aria-label="Số người phê duyệt"></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted">Để trống cả hàng nếu không dùng.</p>
+    {% include "_step_up.html" %}
+    <button type="submit">Lưu phiên bản mới</button>
+  </form>
+</section>
+{% for v in versions %}
+<section class="card">
+  <div class="heading">
+    <h2>Phiên bản {{ v.version }}</h2>
+    {% if v.is_active %}{{ badge("Đang hiệu lực", "ok") }}{% else %}{{ badge("Hết hiệu lực") }}{% endif %}
+  </div>
+  <dl class="summary">
+    <dt>Lãi suất hạng A</dt><dd>{{ v.rate_grade_a | percent }}/năm</dd>
+    <dt>Lãi suất hạng B</dt><dd>{{ v.rate_grade_b | percent }}/năm</dd>
+    <dt>Lãi suất hạng C</dt><dd>{{ v.rate_grade_c | percent }}/năm</dd>
+    <dt>Phí trả trước hạn</dt><dd>{{ v.prepayment_fee_rate | percent }}</dd>
+  </dl>
+  <table class="table">
+    <thead><tr><th>Khoảng hạn mức</th><th>Số người phê duyệt</th></tr></thead>
+    <tbody>
+    {% for t in v.tiers %}
+    <tr><td>{{ t.min_amount | money }} – {{ t.max_amount | money }}</td><td>{{ t.required_approvals }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endfor %}
+{% endblock %}

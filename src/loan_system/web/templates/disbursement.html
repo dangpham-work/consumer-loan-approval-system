@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% from "_macros.html" import badge, csrf_field, errors with context %}
+{% block title %}Giải ngân hồ sơ vay {{ application.code or "" }}{% endblock %}
+{% block content %}
+{% set label, tone = STAFF_APPLICATION_STATUS.get(application.status, (application.status, "neutral")) %}
+<div class="heading">
+  <h1>Giải ngân hồ sơ vay {{ application.code }}</h1>
+  {{ badge(label, tone) }}
+</div>
+{{ errors(error) }}
+
+{% if application.status == "LOCKED" %}
+<section class="card">
+  <h2>Kiểm tra toàn vẹn</h2>
+  <p class="alert alert-danger"><strong>Toàn vẹn: không khớp.</strong> Hồ sơ vay đã bị thay đổi sau khi phê duyệt và đã bị khóa. Kiểm soát viên và Quản lý phê duyệt đã được báo; không thể giải ngân cho đến khi điều tra xong.</p>
+</section>
+{% elif screen %}
+<section class="card">
+  <h2>Kiểm tra toàn vẹn</h2>
+  <p class="alert alert-ok"><strong>Toàn vẹn: khớp</strong> với quyết định phê duyệt lúc {{ screen.approved_at | moment }}.</p>
+</section>
+<section class="card">
+  <h2>Thông tin chuyển tiền</h2>
+  <dl class="summary">
+    <dt>Người nhận</dt><dd>{{ screen.recipient }}</dd>
+    <dt>Tài khoản nhận</dt><dd>{{ screen.receiving_account }}</dd>
+    <dt>Số tiền</dt><dd>{{ screen.amount | money }}</dd>
+    <dt>Lãi suất</dt><dd>{{ screen.annual_rate | percent }}/năm</dd>
+    <dt>Kỳ hạn</dt><dd>{{ screen.term_months }} tháng</dd>
+  </dl>
+</section>
+{% if screen.failed %}
+<section class="card">
+  <h2>Giải ngân thất bại</h2>
+  <p class="alert alert-danger">Cổng thanh toán đã từ chối lệnh giải ngân. Tài khoản nhận không sửa được sau khi phê duyệt: hủy hồ sơ vay để khách hàng nộp hồ sơ vay mới.</p>
+  <form method="post" action="/app/queue/{{ application.id }}/disbursement/cancel" data-confirm="Hủy hồ sơ vay {{ application.code }} để khách hàng lập lại?">
+    {{ csrf_field() }}
+    <button type="submit" class="danger">Hủy hồ sơ vay để lập lại</button>
+  </form>
+</section>
+{% else %}
+<section class="card">
+  <h2>Xác nhận giải ngân</h2>
+  {% if screen.pending %}<p class="alert alert-warn">Lệnh giải ngân trước đang chờ cổng thanh toán. Gửi lại sẽ dùng đúng lệnh đó, tiền không bị chuyển hai lần.</p>{% endif %}
+  <form method="post" action="/app/queue/{{ application.id }}/disburse" data-confirm="Chuyển {{ screen.amount | money }} tới tài khoản {{ screen.receiving_account }}?">
+    {{ csrf_field() }}
+    <label>Mã TOTP trên ứng dụng xác thực
+      <input name="otp" inputmode="numeric" pattern="\d{6}" maxlength="6" autocomplete="one-time-code" required>
+    </label>
+    <button type="submit">Giải ngân</button>
+  </form>
+</section>
+{% endif %}
+{% elif result %}
+{% set loan = result.loan %}
+<section class="card">
+  <h2>Đã giải ngân</h2>
+  <dl class="summary">
+    <dt>Mã giao dịch</dt><dd>{{ result.transaction_ref }}</dd>
+    <dt>Thời điểm</dt><dd>{{ loan.disbursed_at | moment }}</dd>
+    <dt>Số tiền vay</dt><dd>{{ loan.principal | money }}</dd>
+    <dt>Lãi suất</dt><dd>{{ loan.annual_rate | percent }}/năm</dd>
+    <dt>Kỳ hạn</dt><dd>{{ loan.term_months }} tháng</dd>
+    <dt>Trả hằng tháng</dt><dd>{{ loan.monthly_payment | money }}</dd>
+    <dt>SHA-256 hợp đồng</dt><dd><code>{{ loan.contract_sha256 }}</code></dd>
+  </dl>
+  <p><a class="button" href="/app/queue/{{ application.id }}/contract">Tải hợp đồng PDF</a></p>
+</section>
+<section class="card">
+  <h2>Lịch trả nợ</h2>
+  <table class="table">
+    <thead><tr><th>Kỳ</th><th>Hạn trả</th><th>Gốc</th><th>Lãi</th><th>Trạng thái</th></tr></thead>
+    <tbody>
+    {% for i in loan.installments %}
+    {% set il, it = INSTALLMENT_STATUS.get(i.status, (i.status, "neutral")) %}
+    <tr><td>{{ i.number }}</td><td>{{ i.due_date | day }}</td><td>{{ i.principal_due | money }}</td><td>{{ i.interest_due | money }}</td><td>{{ badge(il, it) }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+<p><a href="/app/queue/{{ application.id }}">Về chi tiết hồ sơ vay</a> · <a href="/app/queue">Về hàng đợi</a></p>
+{% endblock %}

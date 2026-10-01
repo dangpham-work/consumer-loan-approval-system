@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field, errors with context %}
+{% block title %}Vai trò – quyền{% endblock %}
+{% block content %}
+<h1>Quản trị</h1>
+{% include "_admin_tabs.html" %}
+<section class="card">
+  <h2>Vai trò và quyền</h2>
+  <table class="table">
+    <thead><tr><th>Mã</th><th>Tên vai trò</th><th>Quyền</th><th></th></tr></thead>
+    <tbody>
+    {% for r in roles %}
+    <tr>
+      <td>{{ r.code }}</td>
+      <td>{{ r.name }}</td>
+      <td class="break">{{ r.permissions | join(", ") }}</td>
+      <td class="row-actions"><a href="/app/admin/roles/{{ r.code }}">Đổi quyền</a></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+<section class="card">
+  <h2>Tạo vai trò</h2>
+  {{ errors(error, field_errors or ()) }}
+  {% set f = form %}
+  <form method="post" action="/app/admin/roles">
+    {{ csrf_field() }}
+    <label>Mã vai trò (chữ in hoa, ví dụ REPORT_READER)
+      <input name="code" value="{{ f.code or '' }}" maxlength="30" autocomplete="off" required>
+    </label>
+    <label>Tên vai trò
+      <input name="name" value="{{ f.name or '' }}" maxlength="100" required>
+    </label>
+    {% set chosen = f.permissions or () %}
+    {% include "_permissions.html" %}
+    {% include "_step_up.html" %}
+    <button type="submit">Tạo vai trò</button>
+  </form>
+</section>
+{% endblock %}

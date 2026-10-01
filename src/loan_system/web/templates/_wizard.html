@@ -1,0 +1,21 @@
+{# Khung chung của M03: thanh 4 bước và thông báo khi đang bổ sung hồ sơ vay (UC15). #}
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field, errors, need_info_notice with context %}
+{% block title %}Nộp hồ sơ vay{% endblock %}
+{% block content %}
+<h1>{% if application and application.need_info %}Bổ sung hồ sơ vay{% elif user.kind == "EMPLOYEE" %}Nộp hộ hồ sơ vay{% else %}Nộp hồ sơ vay{% endif %}{% if application and application.code %} {{ application.code }}{% endif %}</h1>
+<ol class="steps">
+  {% for key, label in steps %}
+  <li{% if key == step %} aria-current="step"{% endif %}>
+    {% if application and key != step and not (key == "loan" and application.status != "DRAFT") %}
+    <a href="/app/applications/{{ application.id }}/{{ key }}">{{ loop.index }}. {{ label }}</a>
+    {% else %}<span>{{ loop.index }}. {{ label }}</span>{% endif %}
+  </li>
+  {% endfor %}
+</ol>
+{% if application %}{{ need_info_notice(application.need_info) }}{% endif %}
+{{ errors(error, field_errors or ()) }}
+<section class="card">
+{% block step %}{% endblock %}
+</section>
+{% endblock %}

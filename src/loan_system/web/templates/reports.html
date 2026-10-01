@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% from "_macros.html" import errors with context %}
+{% macro bars(rows, label_of) %}
+<div class="bars">
+  {% for key, count, width in rows %}
+  <div class="bar-row"><span class="bar-label">{{ label_of(key) }}</span><span class="bar-track"><span class="bar" style="width: {{ width }}%"></span></span><span class="bar-count">{{ count }}</span></div>
+  {% endfor %}
+</div>
+{% endmacro %}
+{% macro status_label(code) %}{{ STAFF_APPLICATION_STATUS.get(code, (code,))[0] }}{% endmacro %}
+{% macro group_label(group) %}Nhóm {{ group }}{% endmacro %}
+{% macro grade_label(grade) %}Hạng {{ grade }}{% endmacro %}
+{% macro rate(value) %}{% if value is none %}<span class="muted">Chưa có dữ liệu</span>{% else %}{{ value | percent }}{% endif %}{% endmacro %}
+{% block title %}Báo cáo thống kê{% endblock %}
+{% block content %}
+<h1>Báo cáo thống kê</h1>
+<form method="get" action="/app/reports" class="card filters">
+  <label>Từ ngày <input type="date" name="from" value="{{ period.from_ }}" required></label>
+  <label>Đến ngày <input type="date" name="to" value="{{ period.to }}" required></label>
+  <button type="submit" class="secondary">Xem báo cáo</button>
+  {% if report %}
+  <a href="/app/reports/export?{{ period.query('CSV') }}">Xuất CSV</a>
+  <a href="/app/reports/export?{{ period.query('PDF') }}">Xuất PDF</a>
+  {% endif %}
+</form>
+<p class="muted">Khoảng tối đa 12 tháng. Hồ sơ vay tính theo ngày nộp; khoản vay tính theo ngày giải ngân trong kỳ, với dư nợ và nhóm nợ hiện tại.</p>
+{{ errors(error) }}
+{% if report %}
+{% set r = report %}
+<section class="figures">
+  <div class="card"><span class="muted">Tổng số hồ sơ vay</span><strong class="figure">{{ r.total_applications }}</strong></div>
+  <div class="card"><span class="muted">Tỷ lệ duyệt ({{ r.approved_count }} duyệt / {{ r.rejected_count }} từ chối)</span><strong class="figure">{{ rate(r.approval_rate) }}</strong></div>
+  <div class="card"><span class="muted">Thời gian xử lý trung bình</span><strong class="figure">{% if r.avg_processing_days is none %}<span class="muted">Chưa có dữ liệu</span>{% else %}{{ r.avg_processing_days | string | replace(".", ",") }} ngày{% endif %}</strong></div>
+  <div class="card"><span class="muted">Tổng giải ngân</span><strong class="figure">{{ r.total_disbursed | money }}</strong></div>
+  <div class="card"><span class="muted">Dư nợ gốc ({{ r.total_loans }} khoản vay)</span><strong class="figure">{{ r.outstanding_principal | money }}</strong></div>
+  <div class="card"><span class="muted">Tỷ lệ quá hạn ({{ r.overdue_loan_count }} khoản vay)</span><strong class="figure">{{ rate(r.overdue_loan_rate) }}</strong></div>
+</section>
+<section class="card">
+  <h2>Hồ sơ vay theo trạng thái</h2>
+  {{ bars(status_bars, status_label) }}
+</section>
+<section class="card">
+  <h2>Khoản vay theo nhóm nợ</h2>
+  {{ bars(group_bars, group_label) }}
+</section>
+<section class="card">
+  <h2>Hồ sơ vay theo hạng tín dụng</h2>
+  {{ bars(grade_bars, grade_label) }}
+</section>
+{% endif %}
+{% endblock %}

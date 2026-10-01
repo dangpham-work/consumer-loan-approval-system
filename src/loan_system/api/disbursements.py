@@ -8,7 +8,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from loan_system.api.access import require
@@ -44,6 +44,7 @@ class DisbursementScreenResponse(BaseModel):
     annual_rate: Decimal
     term_months: int
     pending: bool
+    failed: bool
 
 
 class InstallmentResponse(BaseModel):
@@ -106,3 +107,14 @@ def cancel_disbursement(
 ) -> ApplicationResponse:
     """Ticket #11 (UC25 7b): hủy để lập lại sau khi lệnh giải ngân bị cổng thanh toán từ chối."""
     return respond(disbursements.cancel_failed(user, application_id))
+
+
+@router.get("/{application_id}/contract")
+def get_contract(
+    application_id: uuid.UUID, user: Disburser, disbursements: Disbursements
+) -> Response:
+    """UC26 bước 5: hợp đồng tín dụng PDF đã sinh lúc giải ngân."""
+    return Response(
+        content=disbursements.contract(user, application_id), media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=hop_dong_{application_id}.pdf"},
+    )

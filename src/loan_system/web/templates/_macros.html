@@ -1,0 +1,36 @@
+{# Thành phần dùng chung của mục 4.3a. #}
+
+{% macro csrf_field() %}<input type="hidden" name="csrf" value="{{ csrf }}">{% endmacro %}
+
+{% macro errors(error=None, items=()) %}
+{% if error or items %}
+<div class="alert alert-danger" role="alert">
+  {% if error %}<p>{{ error }}</p>{% endif %}
+  {% if items %}<ul>{% for item in items %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{# Dữ liệu nhạy cảm che mặc định. Nút "Hiện" gọi endpoint `reveal_url` (POST) của REST API; chính
+   endpoint đó ghi log (ví dụ VIEW_PII), rồi thay chuỗi đã che bằng trường `field` của phản hồi JSON. #}
+{% macro masked(value, reveal_url=None, field=None) %}
+<span class="masked"><span class="masked-value">{{ value }}</span>
+{% if reveal_url %}<button type="button" class="link" data-reveal-url="{{ reveal_url }}" data-reveal-field="{{ field }}">Hiện</button>{% endif %}
+</span>
+{% endmacro %}
+
+{# Biểu tượng trạng thái dùng chung: tone là ok, warn, danger hoặc neutral. #}
+{% macro badge(label, tone="neutral") %}<span class="badge badge-{{ tone }}">{{ label }}</span>{% endmacro %}
+
+{# Thao tác không thể hoàn tác (phê duyệt, giải ngân): đặt thuộc tính `data-confirm="<câu hỏi>"`
+   trên thẻ form; app.js hiện hộp thoại xác nhận trước khi gửi. #}
+
+{# Yêu cầu bổ sung hồ sơ vay (UC15) đang chờ khách hàng: lời nhắn, hạn chót và các mục cần bổ sung. #}
+{% macro need_info_notice(need_info) %}
+{% if need_info %}
+<div class="alert alert-warn">
+  <p><strong>Cần bổ sung trước {{ need_info.deadline | moment }}:</strong> {{ need_info.message }}</p>
+  <p>Mục cần bổ sung: {% for item in need_info.items %}{{ ITEMS.get(item, item) }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+</div>
+{% endif %}
+{% endmacro %}

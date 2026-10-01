@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% from "_macros.html" import badge %}
+{% block title %}Khoản vay của tôi{% endblock %}
+{% block content %}
+<h1>Khoản vay của tôi</h1>
+{% if loans %}
+<table class="table">
+  <thead><tr><th>Số tiền vay</th><th>Dư nợ gốc</th><th>Trạng thái</th><th>Kỳ đến hạn tiếp theo</th><th>Số tiền kỳ đó</th><th>Cần thanh toán ngay</th><th></th></tr></thead>
+  <tbody>
+  {% for loan in loans %}
+  {% set label, tone = LOAN_STATUS.get(loan.status, (loan.status, "neutral")) %}
+  <tr>
+    <td>{{ loan.principal | money }}</td>
+    <td>{{ loan.outstanding_principal | money }}</td>
+    <td>{{ badge(label, tone) }}</td>
+    <td>{{ loan.next_due_date | day }}</td>
+    <td>{{ loan.next_due_amount | money }}</td>
+    <td>{{ loan.amount_due | money }}</td>
+    <td class="row-actions"><a href="/app/loans/{{ loan.loan_id }}">Lịch trả nợ, thanh toán</a></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>Bạn không có khoản vay nào đang trả.</p>
+{% endif %}
+{% endblock %}

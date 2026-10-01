@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{% endblock %} · Vay tín dụng tiêu dùng</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}">
+  <script src="{{ url_for('static', path='app.js') }}" defer></script>
+</head>
+<body{% if idle_seconds %} data-idle-seconds="{{ idle_seconds }}"{% endif %}>
+  <header class="topbar">
+    <a class="brand" href="/app">Vay tín dụng tiêu dùng</a>
+    {% if user %}
+    <div class="account">
+      <span class="who">{{ user.username }}</span>
+      <form method="post" action="/app/logout">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button type="submit" class="link">Đăng xuất</button>
+      </form>
+    </div>
+    {% endif %}
+  </header>
+
+  <div class="notices" role="status" aria-live="polite">
+    {% if notice %}<p class="notice">{{ notice }}</p>{% endif %}
+    <p class="notice notice-warn" id="idle-warning" hidden>
+      Phiên làm việc sẽ hết hạn sau <strong id="idle-remaining"></strong> giây.
+      <button type="button" class="link" id="idle-extend">Tiếp tục làm việc</button>
+    </p>
+  </div>
+
+  <div class="layout{% if not user %} layout-guest{% endif %}">
+    {% if user %}
+    <nav class="sidebar" aria-label="Chức năng">
+      <ul>
+        {% for item in menu %}
+        <li><a href="{{ item.path }}"{% if request.url.path == item.path %} aria-current="page"{% endif %}>{{ item.label }}</a></li>
+        {% endfor %}
+      </ul>
+    </nav>
+    {% endif %}
+    <main class="content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <dialog id="confirm-dialog">
+    <form method="dialog">
+      <p id="confirm-message"></p>
+      <div class="actions">
+        <button value="cancel" class="secondary">Hủy</button>
+        <button value="ok" class="danger">Xác nhận</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>

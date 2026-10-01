@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field, errors with context %}
+{% block title %}Thông tin cá nhân{% endblock %}
+{% block content %}
+{% set values = form or {
+  "occupation": profile.occupation or "", "employer": profile.employer or "",
+  "employment_years": profile.employment_years if profile.employment_years is not none else "",
+  "monthly_income": profile.monthly_income if profile.monthly_income is not none else "",
+  "housing_type": profile.housing_type or "", "address": profile.address or ""} %}
+<h1>Thông tin cá nhân</h1>
+{{ errors(error, field_errors or ()) }}
+<section class="card">
+  <dl class="summary">
+    <dt>Họ tên</dt><dd>{{ profile.full_name }}</dd>
+    <dt>Ngày sinh</dt><dd>{{ profile.dob | day }}</dd>
+    <dt>Số điện thoại</dt><dd>{{ profile.phone }}</dd>
+    <dt>Email</dt><dd>{{ profile.email }}</dd>
+  </dl>
+  <p class="muted">Họ tên, ngày sinh và số CCCD không đổi được ở đây. Muốn đổi, vui lòng liên hệ nhân viên tín dụng.</p>
+</section>
+<section class="card">
+  <form method="post" action="/app/profile">
+    {{ csrf_field() }}
+    <label>Nghề nghiệp <input name="occupation" value="{{ values.occupation }}" minlength="2" maxlength="50"></label>
+    <label>Nơi làm việc <input name="employer" value="{{ values.employer }}" minlength="2" maxlength="100"></label>
+    <label>Số năm làm việc <input type="number" name="employment_years" value="{{ values.employment_years }}" min="0" max="50"></label>
+    <label>Thu nhập hằng tháng (đồng){% if profile.income_locked %} <span class="muted">(không đổi được khi đang có hồ sơ vay hoặc khoản vay chưa kết thúc)</span>{% endif %}
+      <input type="number" name="monthly_income" value="{{ values.monthly_income }}" min="0" step="1"{% if profile.income_locked %} disabled{% endif %}>
+    </label>
+    <label>Hình thức nhà ở
+      <select name="housing_type">
+        <option value="">-- Chọn --</option>
+        {% for code, label in HOUSING_TYPES.items() %}
+        <option value="{{ code }}"{% if values.housing_type == code %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Địa chỉ <input name="address" value="{{ values.address }}" minlength="5" maxlength="255"></label>
+    <button type="submit">Lưu thay đổi</button>
+  </form>
+</section>
+{% endblock %}
