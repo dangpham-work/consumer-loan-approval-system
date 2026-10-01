@@ -16,7 +16,7 @@ from loan_system.adapters.payment import FakePaymentGateway
 from loan_system.adapters.sms import FakeSmsGateway
 from tests.api.staff import Staff, otp
 from tests.api.test_appraisal import PHONE, status_of
-from tests.api.test_approval import pending_approval
+from tests.api.test_approval import decide, pending_approval
 from tests.api.test_credit_scoring import NATIONAL_ID, cic_report
 from tests.api.workflow import LOAN, Team, customer_browser, notifications_of
 from tests.conftest import FakeClock
@@ -37,7 +37,7 @@ def customer(client: TestClient, sms: FakeSmsGateway) -> TestClient:
 def approved(team: Team, customer: TestClient, **proposal: Any) -> str:
     """Hồ sơ vay 30 triệu, 12 tháng đã được một Quản lý phê duyệt."""
     app_id = pending_approval(team, customer, **{"proposed_amount": 30_000_000, **proposal})
-    team.approver.client.post(f"/applications/{app_id}/approve", json={}).raise_for_status()
+    decide(team.approver.client, app_id, "approve").raise_for_status()
     return app_id
 
 
@@ -165,7 +165,7 @@ def test_someone_who_approved_the_loan_cannot_disburse_it(
     auditor = team.auditor.client
     both = team.hire("pheduyet_giaingan", "APPROVER", "DISBURSER")
     app_id = pending_approval(team, customer, proposed_amount=30_000_000)
-    both.client.post(f"/applications/{app_id}/approve", json={}).raise_for_status()
+    decide(both.client, app_id, "approve").raise_for_status()
 
     # SoD được kiểm tra trước OTP (SD06): mã sai vẫn bị chặn và ghi nhận là vi phạm SoD.
     response = both.client.post(f"/applications/{app_id}/disburse", json={"otp": "000000"})

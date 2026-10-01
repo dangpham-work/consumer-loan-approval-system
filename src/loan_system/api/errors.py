@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from loan_system.domain.applications import InvalidTransition
 from loan_system.domain.appraisal import InvalidProposal, NoApprovalTier
 from loan_system.domain.documents import InvalidDocument
+from loan_system.domain.report import DateRangeTooLong, InvalidDateRange
 from loan_system.services.application_service import (
     ApplicationInProgress,
     ApplicationNotFound,
@@ -53,10 +54,12 @@ from loan_system.services.customer_service import ContactTaken, IncomeLocked
 from loan_system.services.otp_challenge_service import ChallengeFailed
 from loan_system.services.payment_service import (
     AmountExceedsDue,
+    AmountExceedsPayoff,
     ChargeFailed,
     ChargeUnavailable,
     LoanNotFound,
     LoanNotPayable,
+    QuoteExpired,
     ReceiptRequired,
     ReferenceReused,
 )
@@ -178,11 +181,23 @@ FIXED: dict[type[Exception], tuple[int, str]] = {
     AmountExceedsDue: (
         status.HTTP_400_BAD_REQUEST, "Số tiền vượt quá tổng số tiền còn phải trả"
     ),
+    AmountExceedsPayoff: (status.HTTP_400_BAD_REQUEST, "Số tiền vượt quá số tiền tất toán"),
+    QuoteExpired: (
+        status.HTTP_409_CONFLICT,
+        "Báo giá tất toán chỉ có hiệu lực trong ngày. Vui lòng xem lại số tiền tất toán.",
+    ),
     ChargeFailed: (
         status.HTTP_409_CONFLICT, "Cổng thanh toán từ chối giao dịch. Vui lòng thử lại."
     ),
     ChargeUnavailable: (
         status.HTTP_409_CONFLICT, "Cổng thanh toán tạm thời không phản hồi. Vui lòng thử lại."
+    ),
+    InvalidDateRange: (
+        status.HTTP_400_BAD_REQUEST, "Khoảng thời gian không hợp lệ: ngày kết thúc phải sau ngày bắt đầu."
+    ),
+    DateRangeTooLong: (
+        status.HTTP_400_BAD_REQUEST,
+        "Khoảng thời gian quá dài (tối đa 12 tháng). Vui lòng thu hẹp khoảng thời gian.",
     ),
 }
 # Thông điệp do tầng nghiệp vụ soạn, an toàn để hiển thị.

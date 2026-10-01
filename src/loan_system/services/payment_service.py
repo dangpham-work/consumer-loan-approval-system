@@ -1,4 +1,4 @@
-"""UC27 Xem lịch trả nợ, UC28 Thanh toán kỳ (màn hình M04, SD07).
+"""UC27 Xem lịch trả nợ, UC28 Thanh toán kỳ, UC31 Tất toán khoản vay (màn hình M04, SD07).
 
 Khách hàng thanh toán trực tuyến qua cổng thanh toán giả lập; NV tín dụng ghi nhận thanh toán tại
 quầy bằng mã phiếu thu do chính họ nhập (kênh suy ra từ loại người dùng, không phải trường client
@@ -7,9 +7,13 @@ tự vào các kỳ theo thứ tự tăng dần (phí phạt → lãi → gốc 
 chuyển thành trả trước cho kỳ sau vì vòng lặp tiếp tục sang kỳ kế tiếp (CONTEXT.md, RepaymentSchedule).
 Không cho trả vượt quá tổng còn lại của mọi kỳ: lịch trả nợ không đổi sau khi giải ngân, chỉ Tất
 toán (ticket #14) mới tính lại số tiền dựa trên lãi phát sinh thực tế để giảm gốc trước hạn.
+
+Tất toán (UC31) include UC28: cùng cách thu tiền và chống ghi nhận trùng, chỉ khác cách phân bổ
+(`domain/settlement.py`) và các kỳ chưa đến hạn bị hủy (3.4b T06, T07).
 """
 
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -29,11 +33,14 @@ from loan_system.domain.loans import (
     PaymentChannel,
 )
 from loan_system.domain.payments import Allocation, allocate_payment, remaining_balance
+from loan_system.domain.settlement import OpenInstallment, PayoffQuote, quote_payoff
 from loan_system.domain.text import vnd
 from loan_system.repositories.models import (
+    ApprovalPolicy,
     Customer,
     Installment,
     Loan,
+    LoanApplication,
     Payment,
     PaymentAllocation,
 )
@@ -60,6 +67,14 @@ class ReceiptRequired(Exception):
 
 class AmountExceedsDue(Exception):
     """Số tiền vượt quá tổng còn lại của mọi kỳ; lịch trả nợ không đổi sau khi giải ngân."""
+
+
+class AmountExceedsPayoff(Exception):
+    """UC31: số tiền vượt quá số tiền tất toán của báo giá trong ngày."""
+
+
+class QuoteExpired(Exception):
+    """UC31 2a: báo giá tất toán chỉ có hiệu lực trong ngày; sang ngày khác phải tính lại."""
 
 
 class ReferenceReused(Exception):
@@ -100,6 +115,20 @@ class ScheduleView:
     amount_due: Decimal  # kể cả phí phạt, chỉ tính các kỳ đã đến hạn (UC28 bước 1)
     next_due_date: date | None
     installments: list[InstallmentView]
+
+
+@dataclass(frozen=True)
+class PayoffQuoteView:
+    """UC31 bước 2: số tiền tất toán tại ngày hiện tại và chi tiết."""
+
+    loan_id: uuid.UUID
+    quoted_on: date  # UC31 2a: chỉ có hiệu lực trong ngày này
+    principal: Decimal
+    due_interest: Decimal
+    accrued_interest: Decimal
+    penalty: Decimal
+    prepayment_fee: Decimal
+    total: Decimal
 
 
 @dataclass(frozen=True)
@@ -196,7 +225,78 @@ class PaymentService:
         total_remaining = sum((b.total_due for b in balances), Decimal(0))
         if amount > total_remaining:
             raise AmountExceedsDue
+        allocations = allocate_payment(balances, amount)
+        return self._record(
+            user, loan, installments, amount, allocations,
+            apply=lambda: self._apply(loan, installments, allocations),
+            action="PAYMENT", receipt_no=receipt_no, idempotency_key=idempotency_key,
+        )
 
+    def payoff_quote(self, user: CurrentUser, loan_id: uuid.UUID) -> PayoffQuoteView:
+        """UC31 bước 2: báo giá tất toán tại ngày hiện tại."""
+        loan = self._load(user, loan_id)
+        if loan.status not in _PAYABLE_LOAN_STATUSES:
+            self._db.rollback()
+            raise LoanNotPayable
+        quote = self._quote(loan, self._installments(loan.id))
+        self._db.rollback()  # chỉ đọc
+        return PayoffQuoteView(
+            loan_id=loan.id, quoted_on=self._clock.now().date(), principal=quote.principal,
+            due_interest=quote.due_interest, accrued_interest=quote.accrued_interest,
+            penalty=quote.penalty, prepayment_fee=quote.prepayment_fee, total=quote.total,
+        )
+
+    def settle(
+        self,
+        user: CurrentUser,
+        loan_id: uuid.UUID,
+        amount: Decimal,
+        quoted_on: date,
+        *,
+        receipt_no: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> PaymentResult:
+        """UC31 bước 3–4: thanh toán số tiền tất toán của báo giá trong ngày (include UC28)."""
+        loan = self._load(user, loan_id, lock=True)
+        if loan.status not in _PAYABLE_LOAN_STATUSES:
+            self._db.rollback()
+            raise LoanNotPayable
+        if quoted_on != self._clock.now().date():
+            self._db.rollback()
+            raise QuoteExpired
+        installments = self._installments(loan.id, lock=True)
+        quote = self._quote(loan, installments)
+        if amount > quote.total:
+            self._db.rollback()
+            raise AmountExceedsPayoff
+        if amount < quote.total:
+            # UC31 3a: thanh toán thiếu thì ghi nhận như thanh toán thông thường.
+            return self.pay(
+                user, loan_id, amount, receipt_no=receipt_no, idempotency_key=idempotency_key
+            )
+        return self._record(
+            user, loan, installments, amount, list(quote.allocations),
+            apply=lambda: self._settle(loan, installments, quote),
+            action="LOAN_SETTLE", receipt_no=receipt_no, idempotency_key=idempotency_key,
+        )
+
+    # --- Nội bộ -------------------------------------------------------------------------------
+
+    def _record(
+        self,
+        user: CurrentUser,
+        loan: Loan,
+        installments: list[Installment],
+        amount: Decimal,
+        allocations: list[Allocation],
+        *,
+        apply: Callable[[], None],
+        action: str,
+        receipt_no: str | None,
+        idempotency_key: str | None,
+    ) -> PaymentResult:
+        """UC28 bước 3–5: thu tiền theo kênh của người dùng, ghi khoản thanh toán cùng phân bổ
+        (`apply` cập nhật kỳ và khoản vay) rồi gửi biên nhận."""
         if user.kind == "CUSTOMER":
             channel = PaymentChannel.ONLINE
             external_ref = self._charge(loan, user, amount, idempotency_key or uuid.uuid4().hex)
@@ -211,14 +311,13 @@ class PaymentService:
             self._db.rollback()
             return self._duplicate(existing, loan.id, amount)
 
-        allocations = allocate_payment(balances, amount)
         now = self._clock.now()
         payment = Payment(
             id=uuid.uuid4(), loan_id=loan.id, amount=amount, channel=channel,
             external_ref=external_ref, paid_at=now, recorded_by=user.user_id,
         )
         self._db.add(payment)
-        self._apply(loan, installments, allocations)
+        apply()
         self._db.add_all(
             PaymentAllocation(
                 payment_id=payment.id, installment_id=a.installment_id, component=a.component,
@@ -227,7 +326,7 @@ class PaymentService:
             for a in allocations
         )
         self._audit.log(
-            "PAYMENT", actor_id=user.user_id, target_type="LOAN", target_id=loan.id,
+            action, actor_id=user.user_id, target_type="LOAN", target_id=loan.id,
             ip_address=self._ip, detail=external_ref,
         )
         self._send_receipt(loan, amount)
@@ -249,7 +348,59 @@ class PaymentService:
             loan_status=loan.status, outstanding_principal=loan.outstanding_principal,
         )
 
-    # --- Nội bộ -------------------------------------------------------------------------------
+    def _quote(self, loan: Loan, installments: list[Installment]) -> PayoffQuote:
+        today = self._clock.now().date()
+        application = self._db.get_one(LoanApplication, loan.application_id)
+        assert application.policy_id is not None  # chốt khi chấm điểm, trước khi giải ngân
+        # Phí trả trước hạn theo phiên bản chính sách hồ sơ vay đã chốt (ADR 0001).
+        policy = self._db.get_one(ApprovalPolicy, application.policy_id)
+        open_installments = []
+        for i in installments:
+            if i.status not in UNPAID_INSTALLMENT:
+                continue
+            balance = remaining_balance(
+                i.id, penalty=i.penalty, interest_due=i.interest_due,
+                principal_due=i.principal_due, penalty_paid=i.penalty_paid,
+                paid_amount=i.paid_amount,
+            )
+            open_installments.append(
+                OpenInstallment(balance, i.due_date, i.interest_due - balance.interest_due)
+            )
+        return quote_payoff(
+            open_installments,
+            today=today,
+            period_start=max(
+                (i.due_date for i in installments if i.due_date <= today),
+                default=loan.disbursed_at.date(),
+            ),
+            annual_rate=loan.annual_rate,
+            prepayment_fee_rate=policy.prepayment_fee_rate,
+            # BR10: mọi kỳ trừ kỳ cuối đã đến hạn.
+            in_final_installment=all(i.due_date <= today for i in installments[:-1]),
+        )
+
+    def _settle(self, loan: Loan, installments: list[Installment], quote: PayoffQuote) -> None:
+        """UC31 bước 4, 3.4b T06/T07: kỳ đã đến hạn được trả đủ, các kỳ còn lại bị hủy."""
+        by_id = {i.id: i for i in installments}
+        for allocation in quote.allocations:
+            installment = by_id[allocation.installment_id]
+            installment.paid_amount += allocation.amount
+            if allocation.component == "PENALTY":
+                installment.penalty_paid += allocation.amount
+        cancelled = set(quote.cancelled)
+        for installment in installments:
+            if installment.status in UNPAID_INSTALLMENT:
+                installment.status = (
+                    InstallmentStatus.CANCELLED if installment.id in cancelled
+                    else InstallmentStatus.PAID
+                )
+        self._audit.log(
+            "LOAN_STATUS_CHANGE", target_type="LOAN", target_id=loan.id,
+            detail=f"{loan.status}->{LoanStatus.SETTLED}",
+        )
+        loan.outstanding_principal = Decimal(0)
+        loan.status = LoanStatus.SETTLED
+        loan.settled_at = self._clock.now()
 
     def _load(self, user: CurrentUser, loan_id: uuid.UUID, *, lock: bool = False) -> Loan:
         query = select(Loan).where(Loan.id == loan_id)

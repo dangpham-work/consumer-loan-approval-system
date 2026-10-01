@@ -5,6 +5,7 @@ nhập, để không bị lợi dụng giả mạo lừa đảo (UC30).
 """
 
 import uuid
+from collections.abc import Collection
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -44,16 +45,20 @@ class NotificationService:
         if sms_phone:
             self._outbox.append((sms_phone, content))
 
-    def notify_role(self, role_code: str, type_: str, content: str) -> None:
-        recipients = self._db.scalars(
-            select(User.id)
+    def notify_role(
+        self, role_code: str, type_: str, content: str,
+        *, except_employees: Collection[uuid.UUID | None] = (),
+    ) -> None:
+        recipients = self._db.execute(
+            select(User.id, User.employee_id)
             .join(UserRole, UserRole.user_id == User.id)
             .join(Role, Role.id == UserRole.role_id)
             .where(Role.code == role_code)
             .where(User.status == AccountStatus.ACTIVE)
         ).all()
-        for user_id in recipients:
-            self.notify(user_id, type_, content)
+        for user_id, employee_id in recipients:
+            if employee_id is None or employee_id not in except_employees:
+                self.notify(user_id, type_, content)
 
     def notify_employee(self, employee_id: uuid.UUID, type_: str, content: str) -> None:
         user_id = self._db.scalars(select(User.id).where(User.employee_id == employee_id)).first()

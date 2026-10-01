@@ -17,6 +17,7 @@ from loan_system.api import (
     customers,
     errors,
     notifications,
+    reports,
 )
 from loan_system.api import payments as payments_api
 from loan_system.api.deps import AppContext
@@ -68,5 +69,6 @@ def create_app(
     app.include_router(counter.router)
     app.include_router(notifications.router)
     app.include_router(audit.router)
+    app.include_router(reports.router)
     errors.register(app)
     return app

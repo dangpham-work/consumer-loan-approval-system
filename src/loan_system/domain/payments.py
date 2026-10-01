@@ -9,7 +9,8 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Literal
 
-Component = Literal["PENALTY", "INTEREST", "PRINCIPAL"]
+# FEE: phí trả trước hạn, chỉ phát sinh khi Tất toán (UC31, BR10).
+Component = Literal["PENALTY", "INTEREST", "PRINCIPAL", "FEE"]
 
 
 @dataclass(frozen=True)

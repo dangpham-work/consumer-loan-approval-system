@@ -129,6 +129,15 @@ Kết quả phiên hỏi đáp rà soát đề cương `De_cuong_OOAD_Vay_tin_du
 - [ ] **Thông báo**: duyệt thì báo khách hàng (SMS và trong ứng dụng, nêu hạn mức, kỳ hạn) và mọi NV giải ngân; từ chối thì báo khách hàng chỉ nhóm lý do (không kèm mô tả); trả về thì báo người thẩm định kèm nội dung cần làm rõ; chưa đủ số lượt thì báo các Quản lý phê duyệt (UC23 6a).
 - [ ] **Quy tắc gộp AD04** đã có ở tầng miền; test phê duyệt kép (TC02) và khóa lạc quan trả 409 làm ở ticket #9. Kiểm tra snapshot trước giải ngân (SUC02) làm ở ticket #10.
 
+## Phát sinh khi cài đặt (ticket #9)
+
+- [ ] **UC23 6b (khóa lạc quan)**: `GET /applications/{id}/approval` trả thêm `version` (cột `loan_applications.version`); `POST .../approve`, `.../reject`, `.../return` bắt buộc gửi lại `version` đó (thiếu thì 400). Hồ sơ vay không còn "Chờ phê duyệt" thì vẫn 409 như trước; còn chờ nhưng phiên bản khác thì 409 "Hồ sơ vay vừa được cập nhật, vui lòng tải lại" và không ghi quyết định nào.
+- [ ] **Mọi quyết định đều tăng `version`**, kể cả phê duyệt đầu tiên của khoản trên 50 triệu, khi hồ sơ vay vẫn "Chờ phê duyệt" (6a). Nhờ vậy Quản lý thứ hai đang mở M07 cũ phải tải lại để thấy quyết định vừa có rồi mới quyết định. Hai người vẫn quyết định độc lập, không phân biệt thứ tự (AD04), nhưng luôn trên lịch sử quyết định mới nhất. Khóa dòng (UPDLOCK) có từ ticket #8 vẫn giữ: hai yêu cầu cùng phiên bản đến đồng thời thì yêu cầu sau chờ, đọc lại dòng đã đổi phiên bản và nhận 409.
+- [ ] **Tổ hợp quyết định cho khoản cần hai phê duyệt**: Phê duyệt + Phê duyệt thì duyệt (snapshot chỉ ký trên quyết định thứ hai); Phê duyệt + Từ chối thì từ chối; Phê duyệt + Trả về thì về thẩm định; Từ chối hoặc Trả về ngay từ đầu thì kết thúc luôn, người thứ hai nhận 409. Trả về làm vô hiệu phê duyệt trước; tờ trình mới lại cần đủ hai phê duyệt, kể cả của người đã quyết định trên tờ trình cũ. Một Quản lý không phê duyệt hai lần (403, SUC01).
+- [ ] **SUC01 được kiểm tra trước phiên bản**: người vi phạm phân tách nhiệm vụ gửi phiên bản cũ vẫn nhận 403 và bị ghi `SOD_VIOLATION`, không lẩn vào 409.
+- [ ] **UC23 6a**: "thông báo quản lý thứ hai" gửi cho mọi Quản lý phê duyệt còn được quyết định trên tờ trình hiện hành, trừ người vừa phê duyệt và những người bị SUC01 chặn (Người tạo, Người tiếp nhận, người thẩm định). Không có khái niệm "quản lý thứ hai được chỉ định" trong đề cương.
+- [ ] **Chưa làm UC23 3a (vượt thẩm quyền)**: chỉ có một vai trò phê duyệt (ghi ở ticket #7), nên mọi Quản lý phê duyệt đều đủ thẩm quyền với mọi hạn mức.
+
 ## Phát sinh khi cài đặt (ticket #16)
 
 - [ ] **Màn hình M09** mở rộng có API: `GET /admin/roles`, `GET /admin/permissions` (bảng quyền hiện có), `POST /admin/roles` (tạo vai trò kèm tập quyền ban đầu), `PUT /admin/roles/{code}/permissions` (đổi tập quyền), `GET /admin/policies`, `POST /admin/policies` (lưu phiên bản chính sách mới). Cả bốn thao tác ghi đều yêu cầu step-up OTP (UC02) như UC04.
@@ -178,3 +187,19 @@ Kết quả phiên hỏi đáp rà soát đề cương `De_cuong_OOAD_Vay_tin_du
 - [ ] **UC30**: bảng mới `payment_reminders` (kỳ, mốc, thời điểm gửi) là "lưu trạng thái gửi" (bước 4). Mốc quá hạn là mốc gần nhất đã tới (1/7/15/30 ngày): đêm bị lỡ thì lần chạy sau gửi bù mốc vừa qua, một lần. Nội dung gồm mã hồ sơ vay đã che, kỳ, số tiền còn phải trả và hạn thanh toán, không có liên kết. SMS lỗi thì thử lại 2 lần rồi bỏ qua tin đó; số tin lỗi ghi trong nhật ký `OVERDUE_JOB`.
 - [ ] **BR11**: hồ sơ vay NEED_INFO quá `need_info_deadline` chuyển CANCELLED (lý do "Quá hạn bổ sung hồ sơ (BR11)", không có người thực hiện), ghi `APPLICATION_AUTO_CANCEL` và báo khách hàng (`APPLICATION_CANCELLED`).
 - [ ] **UC18 4a**: hồ sơ vay VERIFIED quá 1 giờ kể từ lần chuyển VERIFIED gần nhất được chấm lại mỗi đêm; lỗi bất ngờ ghi `SCORING_FAILED`, file mô hình sai checksum thì cảnh báo Quản trị viên lại. CIC vẫn được tra cứu trước khi kiểm tra checksum (thứ tự của SD03), nên mỗi đêm có thể có một lượt tra cứu CIC thừa cho hồ sơ vay kẹt vì mô hình.
+
+## Phát sinh khi cài đặt (ticket #14)
+
+- [ ] **UC31 bước 2**: `GET /loans/{id}/payoff-quote` (quyền `LOAN_SETTLE`) trả báo giá tại ngày hiện tại: dư nợ gốc, lãi còn nợ của các kỳ đã đến hạn, lãi phát sinh, phí phạt chưa trả, phí trả trước hạn, tổng và `quoted_on`. Kỳ đã đến hạn mà chưa trả đủ (kể cả quá hạn) phải trả đủ lãi theo lịch; lãi phát sinh (1.2.8d) chỉ tính trên gốc của các kỳ chưa đến hạn, từ ngày đến hạn gần nhất (hoặc ngày giải ngân), vì gốc quá hạn đã chịu phí phạt. Lãi đã trả trước cho kỳ chưa đến hạn (UC28 4a) được trừ vào lãi phát sinh; phần vượt quá không được hoàn.
+- [ ] **Phí trả trước hạn**: tỷ lệ lấy theo phiên bản chính sách phê duyệt hồ sơ vay đã chốt (ADR 0001), tính trên dư nợ gốc còn lại. BR10: miễn khi mọi kỳ trừ kỳ cuối đã đến hạn, hoặc không còn kỳ nào chưa đến hạn.
+- [ ] **UC31 bước 3–4**: `POST /loans/{id}/settlement` (số tiền, `quoted_on`, mã phiếu thu hoặc `idempotency_key` như UC28) thu tiền và chống ghi nhận trùng như UC28. Đủ số tiền tất toán thì kỳ đã đến hạn thành PAID, các kỳ còn lại CANCELLED, khoản vay SETTLED (3.4b T06, T07), ghi `LOAN_SETTLE` và `LOAN_STATUS_CHANGE`, gửi xác nhận tất toán (`LOAN_SETTLED`). Phí trả trước hạn là thành phần phân bổ mới `FEE` (migration 0012).
+- [ ] **UC31 2a**: `quoted_on` khác hôm nay thì 409, không thu tiền. **3a**: số tiền nhỏ hơn số tiền tất toán thì ghi nhận như thanh toán kỳ thông thường; lớn hơn thì 400. Khoản vay BAD_DEBT hoặc SETTLED thì 409, như UC28.
+- [ ] **Màn hình**: dự án chưa có tầng Jinja2 (M04), nên ticket này chỉ gồm API.
+
+## Phát sinh khi cài đặt (ticket #18)
+
+- [ ] **UC32**: `GET /reports/statistics` (quyền `REPORT_VIEW`, đã gán cho APPROVER từ ma trận RBAC ở ticket #3, không cần migration mới) trả trọn bộ chỉ tiêu của M11 trong một lần gọi — đề cương chỉ liệt kê một bộ biểu đồ cố định cho màn hình này, không có khái niệm "loại báo cáo" khác cần chọn riêng. Tham số `from`, `to` (ngày, bắt buộc); quá 12 tháng thì 400 (UC32 2a), ngày kết thúc trước ngày bắt đầu cũng 400.
+- [ ] **Phạm vi tổng hợp**: hồ sơ vay tính theo `submitted_at` trong kỳ (số hồ sơ theo trạng thái, tỷ lệ duyệt/từ chối, thời gian xử lý trung bình từ nộp đến quyết định đầu tiên trong `application_status_history`); khoản vay (dư nợ, nhóm nợ, tỷ lệ quá hạn) tính trên các khoản giải ngân trong kỳ (`disbursed_at`), lấy `outstanding_principal`/`debt_group` hiện tại — hệ thống không lưu lịch sử dư nợ theo thời điểm nên không dựng lại được đúng số dư tại `to`.
+- [ ] **`GET /reports/statistics/export`** (`format=CSV|PDF`, mặc định CSV): ghi log `REPORT_EXPORT`. "Excel" cài đặt bằng CSV có BOM UTF-8 để Excel đọc đúng tiếng Việt (cùng cách làm CSV của ticket #15, không thêm phụ thuộc xlsx); PDF dùng fpdf2, chữ bỏ dấu như hợp đồng (ticket #10). Báo cáo chỉ có số liệu tổng hợp (đếm, tổng tiền, tỷ lệ), không có tên khách hàng hay mã hồ sơ vay (SR07).
+- [ ] **Không có bảng mới**: mọi chỉ tiêu tính trực tiếp từ các bảng đã có (`loan_applications`, `application_status_history`, `disbursements`, `loans`, `credit_scores`).
+- [ ] **Màn hình**: dự án chưa có tầng Jinja2, nên ticket này chỉ gồm API (như ticket #14).

@@ -46,6 +46,12 @@ def approval_screen(approver: TestClient, app_id: str) -> dict[str, Any]:
     return body
 
 
+def decide(approver: TestClient, app_id: str, action: str, **body: Any) -> Any:
+    """Quản lý mở M07 rồi quyết định (approve, reject, return) trên đúng phiên bản vừa xem."""
+    version = approval_screen(approver, app_id)["version"]
+    return approver.post(f"/applications/{app_id}/{action}", json={"version": version, **body})
+
+
 def test_approver_approves_and_the_approved_snapshot_is_signed(
     team: Team, customer: TestClient, sms: FakeSmsGateway
 ) -> None:
@@ -61,7 +67,8 @@ def test_approver_approves_and_the_approved_snapshot_is_signed(
     assert screen["application"]["applicant"]["national_id"] == "079******234"  # dữ liệu đã che
 
     approved = approver.post(
-        f"/applications/{app_id}/approve", json={"comment": "Đồng ý theo tờ trình."}
+        f"/applications/{app_id}/approve",
+        json={"version": screen["version"], "comment": "Đồng ý theo tờ trình."},
     )
 
     assert approved.status_code == 200, approved.text
@@ -87,10 +94,11 @@ def test_st02_credit_officer_calling_the_approval_api_is_forbidden(
     app_id = pending_approval(team, customer)
     officer = team.officer.client
 
-    approve = officer.post(f"/applications/{app_id}/approve", json={})
+    # Nhân viên tín dụng không mở được M07; bị chặn trước khi phiên bản được xét.
+    approve = officer.post(f"/applications/{app_id}/approve", json={"version": 1})
     reject = officer.post(
         f"/applications/{app_id}/reject",
-        json={"reason_group": "OTHER", "description": "Tự ý từ chối hồ sơ vay này."},
+        json={"version": 1, "reason_group": "OTHER", "description": "Tự ý từ chối hồ sơ vay này."},
     )
 
     assert approve.status_code == reject.status_code == 403  # thiếu LOAN_APPROVE, LOAN_REJECT
@@ -110,7 +118,7 @@ def test_st03_manager_cannot_approve_an_application_they_received(
     team.appraiser.client.post(f"/applications/{app_id}/appraisal", json=report()).raise_for_status()
 
     assert approval_screen(both.client, app_id)["can_decide"] is False
-    response = both.client.post(f"/applications/{app_id}/approve", json={})
+    response = decide(both.client, app_id, "approve")
 
     assert response.status_code == 403  # SUC01, BR06
     assert status_of(customer, app_id) == "PENDING_APPROVAL"
@@ -118,7 +126,7 @@ def test_st03_manager_cannot_approve_an_application_they_received(
     assert [(v["level"], v["target_id"]) for v in violations] == [("WARNING", app_id)]
     assert any(n["type"] == "SOD_VIOLATION" for n in notifications_of(auditor))
     # Quản lý khác vẫn phê duyệt được.
-    team.approver.client.post(f"/applications/{app_id}/approve", json={}).raise_for_status()
+    decide(team.approver.client, app_id, "approve").raise_for_status()
 
 
 def test_the_appraiser_cannot_also_approve(team: Team, customer: TestClient) -> None:
@@ -127,7 +135,7 @@ def test_the_appraiser_cannot_also_approve(team: Team, customer: TestClient) -> 
     open_appraisal(both.client, app_id)
     both.client.post(f"/applications/{app_id}/appraisal", json=report()).raise_for_status()
 
-    assert both.client.post(f"/applications/{app_id}/approve", json={}).status_code == 403
+    assert decide(both.client, app_id, "approve").status_code == 403
 
 
 def test_rejection_tells_the_customer_only_the_reason_group(
@@ -136,9 +144,9 @@ def test_rejection_tells_the_customer_only_the_reason_group(
     app_id = pending_approval(team, customer)
     description = "Thu nhập thực tế thấp hơn khai báo theo xác minh nội bộ."
 
-    rejected = team.approver.client.post(
-        f"/applications/{app_id}/reject",
-        json={"reason_group": "FINANCIAL_CAPACITY", "description": description},
+    rejected = decide(
+        team.approver.client, app_id, "reject",
+        reason_group="FINANCIAL_CAPACITY", description=description,
     )
 
     assert rejected.status_code == 200, rejected.text
@@ -167,7 +175,7 @@ def test_rejection_and_return_need_a_reason(
 ) -> None:
     app_id = pending_approval(team, customer)
 
-    response = team.approver.client.post(f"/applications/{app_id}/{path}", json=body)
+    response = decide(team.approver.client, app_id, path, **body)
 
     assert response.status_code == 400  # UC24 2a
     assert status_of(customer, app_id) == "PENDING_APPROVAL"
@@ -180,7 +188,7 @@ def test_returned_application_is_appraised_again_and_old_decisions_no_longer_cou
     app_id = pending_approval(team, customer)
     clarification = "Cần làm rõ nguồn thu nhập thêm ngoài lương."
 
-    returned = approver.post(f"/applications/{app_id}/return", json={"clarification": clarification})
+    returned = decide(approver, app_id, "return", clarification=clarification)
 
     assert returned.status_code == 200, returned.text
     assert status_of(customer, app_id) == "APPRAISING"
@@ -196,7 +204,7 @@ def test_returned_application_is_appraised_again_and_old_decisions_no_longer_cou
     assert screen["report"]["proposed_amount"] == "20000000"
     assert [d["superseded"] for d in screen["decisions"]] == [True]
 
-    approved = approver.post(f"/applications/{app_id}/approve", json={})
+    approved = decide(approver, app_id, "approve")
 
     assert approved.status_code == 200, approved.text
     assert approved.json()["approved_amount"] == "20000000"
@@ -211,13 +219,13 @@ def test_a_rejection_proposal_cannot_be_approved(team: Team, customer: TestClien
     )
     approver = team.approver.client
 
-    refused = approver.post(f"/applications/{app_id}/approve", json={})
+    refused = decide(approver, app_id, "approve")
 
     assert refused.status_code == 409
     assert status_of(customer, app_id) == "PENDING_APPROVAL"
-    approver.post(
-        f"/applications/{app_id}/reject",
-        json={"reason_group": "FRAUD_SUSPECTED", "description": "Đồng ý với đề xuất từ chối."},
+    decide(
+        approver, app_id, "reject",
+        reason_group="FRAUD_SUSPECTED", description="Đồng ý với đề xuất từ chối.",
     ).raise_for_status()
 
 
@@ -225,13 +233,16 @@ def test_decisions_only_while_pending_approval(team: Team, customer: TestClient)
     approver = team.approver.client
     app_id = appraising(team, customer)
 
-    assert approver.post(f"/applications/{app_id}/approve", json={}).status_code == 409
+    # Chưa chờ phê duyệt nên M07 chưa mở được; bị chặn trước khi phiên bản được xét.
+    assert approver.post(f"/applications/{app_id}/approve", json={"version": 1}).status_code == 409
     assert approver.get(f"/applications/{app_id}/approval").status_code == 409
 
     open_appraisal(team.appraiser.client, app_id)
     team.appraiser.client.post(f"/applications/{app_id}/appraisal", json=report()).raise_for_status()
-    approver.post(f"/applications/{app_id}/approve", json={}).raise_for_status()
+    approved = decide(approver, app_id, "approve")
+    approved.raise_for_status()
     again = approver.post(
-        f"/applications/{app_id}/return", json={"clarification": "Muốn xem lại tờ trình."}
+        f"/applications/{app_id}/return",
+        json={"version": approved.json()["version"], "clarification": "Muốn xem lại tờ trình."},
     )
     assert again.status_code == 409
