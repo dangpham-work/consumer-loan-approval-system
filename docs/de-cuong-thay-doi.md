@@ -40,10 +40,10 @@ Kết quả phiên hỏi đáp rà soát đề cương `De_cuong_OOAD_Vay_tin_du
 - [ ] **3.4b T02**: bỏ "nhóm nợ 2" khỏi hành động. `debt_group` tách khỏi `status`: quá hạn 1–9 ngày là OVERDUE nhưng vẫn nhóm 1 (Q4).
 - [ ] **`loan_applications`**: thêm cột `annual_rate` và `created_by` (Q2, Q3).
 - [ ] **`approval_policies`**: thêm bảng lãi suất theo hạng và tỷ lệ phí trả trước hạn (Q8, Q10).
-- [ ] **Mục 4.1.2 và 4.1.2d**: đổi CSDL từ PostgreSQL sang SQL Server (ADR 0003). Ánh xạ kiểu: UUID → UNIQUEIDENTIFIER, NUMERIC → DECIMAL, VARCHAR/TEXT → NVARCHAR, BYTEA → VARBINARY(MAX), TIMESTAMPTZ → DATETIMEOFFSET, BOOLEAN → BIT, JSONB → NVARCHAR(MAX) + CHECK ISJSON, INET → VARCHAR(45), BIGSERIAL → BIGINT IDENTITY.
-- [ ] **Mục 4.1.2e**: quyền CSDL viết theo SQL Server (`DENY UPDATE, DELETE` cho `app_rw`); trigger bằng T-SQL; kết nối `Encrypt=yes`; sao lưu bằng `BACKUP DATABASE … WITH ENCRYPTION` thay cho `pg_dump`.
-- [ ] **Mục 4.2.1, 4.2.3 (biểu đồ triển khai)**: nút Database server là SQL Server, cổng 1433 thay cho 5432.
-- [ ] **Mục 5.1**: bảng công cụ đổi PostgreSQL thành SQL Server 2022 + pyodbc (ODBC Driver 18).
+- [ ] **Mục 4.1.2 và 4.1.2d**: đổi CSDL từ PostgreSQL sang MySQL (ADR 0004, thay ADR 0003). Ánh xạ kiểu: UUID → CHAR(32), NUMERIC → DECIMAL, VARCHAR/TEXT → VARCHAR (utf8mb4), BYTEA → BLOB/LONGBLOB, TIMESTAMPTZ → DATETIME(6) lưu UTC, BOOLEAN → TINYINT(1), JSONB → TEXT + CHECK JSON_VALID, INET → VARCHAR(45), BIGSERIAL → BIGINT AUTO_INCREMENT. Chỉ mục duy nhất có điều kiện → cột sinh kèm UNIQUE; SEQUENCE → bảng đếm `counters`.
+- [ ] **Mục 4.1.2e**: quyền CSDL viết theo MySQL (tài khoản ứng dụng chỉ được `GRANT SELECT, INSERT` trên `audit_logs` và `approval_decisions`, quyền theo từng bảng, không có quyền DDL); trigger `BEFORE UPDATE` với `SIGNAL`; sao lưu bằng `mysqldump` rồi mã hóa file thay cho `pg_dump`.
+- [ ] **Mục 4.2.1, 4.2.3 (biểu đồ triển khai)**: nút Database server là MySQL, cổng 3306 thay cho 5432.
+- [ ] **Mục 5.1**: bảng công cụ đổi PostgreSQL thành MySQL 8.4 + PyMySQL.
 - [ ] **Biểu đồ lớp 1**: thêm `annualRate`, `createdBy` vào LoanApplication; thêm lãi suất theo hạng và phí trả trước hạn vào ApprovalPolicy (Q2, Q3, Q8).
 
 ## Phát sinh khi cài đặt (ticket #1)
@@ -52,7 +52,6 @@ Kết quả phiên hỏi đáp rà soát đề cương `De_cuong_OOAD_Vay_tin_du
 - [ ] **Bảng mới `sessions`**: phiên đăng nhập lưu phía máy chủ (chỉ lưu mã băm token) thay cho JWT, để đăng xuất và hết hạn 15 phút (SR11) có hiệu lực ngay.
 - [ ] **`users.username` của khách hàng = số điện thoại**.
 - [ ] **`customers.national_id_enc`, `national_id_hash`**: UC09 không thu thập CCCD, nên hai cột này sẽ được thêm ở ticket #4 và cho phép NULL cho đến khi khách hàng nộp hồ sơ vay đầu tiên (đề cương đang đặt NOT NULL).
-- [ ] **Mục 5.1**: môi trường dev dùng ODBC Driver 17 (máy phát triển), container dùng ODBC Driver 18.
 
 ## Phát sinh khi cài đặt (ticket #3, #4)
 

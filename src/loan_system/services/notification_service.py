@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from loan_system.adapters.sms import SmsGateway
 from loan_system.clock import Clock
 from loan_system.domain.access import CREDIT_OFFICER, AccountStatus
+from loan_system.repositories.atomic import update_matched
 from loan_system.repositories.models import Notification, Role, User, UserRole
 
 MAX_LISTED = 50
@@ -127,12 +128,12 @@ class NotificationService:
 
     def mark_read(self, user_id: uuid.UUID, notification_id: uuid.UUID) -> bool:
         """Chỉ đánh dấu thông báo của chính người gọi (SR04)."""
-        updated = self._db.execute(
+        updated = update_matched(
+            self._db,
             update(Notification)
             .where(Notification.id == notification_id)
             .where(Notification.recipient_user_id == user_id)
-            .values(is_read=True)
-            .returning(Notification.id)
-        ).first()
+            .values(is_read=True),
+        )
         self._db.commit()
-        return updated is not None
+        return updated

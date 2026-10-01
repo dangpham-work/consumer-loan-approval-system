@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import ColumnElement, func, or_, select, text, update
+from sqlalchemy import ColumnElement, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import StaleDataError
@@ -36,6 +36,7 @@ from loan_system.domain.applications import (
 from loan_system.domain.calculations import annuity_payment
 from loan_system.domain.documents import check_document
 from loan_system.domain.loans import UNSETTLED
+from loan_system.repositories.counters import LOAN_APPLICATION_CODE, next_value
 from loan_system.repositories.models import (
     ApplicationDocument,
     ApplicationStatusHistory,
@@ -243,11 +244,10 @@ class ApplicationService:
     ) -> ApplicationView:
         """Khách hàng tự lập, hoặc NV tín dụng lập hộ (UC12 1a: ghi nhận Người tạo)."""
         # Khóa dòng khách hàng đến hết giao dịch: hai yêu cầu tạo song song không cùng lọt BR02.
-        # Dialect SQL Server bỏ qua with_for_update(), nên phải ghi rõ table hint.
         customer = self._db.scalars(
             select(Customer)
-            .with_hint(Customer, "WITH (UPDLOCK, ROWLOCK)", "mssql")
             .where(Customer.id == customer_id)
+            .with_for_update()
             .execution_options(populate_existing=True)
         ).one_or_none()
         if customer is None:
@@ -372,9 +372,7 @@ class ApplicationService:
         now = self._clock.now()
         first_time = application.code is None
         if first_time:
-            sequence: int = self._db.execute(
-                text("SELECT NEXT VALUE FOR loan_application_code_seq")
-            ).scalar_one()
+            sequence = next_value(self._db, LOAN_APPLICATION_CODE)
             application.code = application_code(now.year, sequence)
             application.submitted_at = now
         # SR14: ghi nhận sự đồng ý xử lý dữ liệu cá nhân gắn với chính Hồ sơ vay này.
@@ -558,7 +556,7 @@ class ApplicationService:
         if lock:
             # Khóa dòng đến hết giao dịch: các thao tác trên cùng hồ sơ vay chạy tuần tự, ví dụ
             # không thể gắn thêm file vào hồ sơ vay vừa được nộp.
-            query = query.with_hint(LoanApplication, "WITH (UPDLOCK, ROWLOCK)", "mssql")
+            query = query.with_for_update()
         application = self._db.scalars(
             query.execution_options(populate_existing=True)
         ).one_or_none()

@@ -1,5 +1,6 @@
 """Seam 1: UC27 Xem lịch trả nợ, UC28 Thanh toán kỳ, phân bổ và chống ghi nhận trùng (ticket #12)."""
 
+import uuid
 from decimal import Decimal
 
 import pytest
@@ -50,7 +51,7 @@ def mark_overdue(engine: Engine, loan_id: str, number: int, penalty: int) -> Non
                 "UPDATE installments SET status = 'OVERDUE', penalty = :penalty "
                 "WHERE loan_id = :loan_id AND number = :number"
             ),
-            {"loan_id": loan_id, "number": number, "penalty": penalty},
+            {"loan_id": uuid.UUID(loan_id).hex, "number": number, "penalty": penalty},
         )
 
 

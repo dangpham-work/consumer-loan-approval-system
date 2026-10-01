@@ -1,8 +1,9 @@
-"""Test harness cho Seam 1: REST API chạy trên SQL Server thật.
+"""Test harness cho Seam 1: REST API chạy trên MySQL thật.
 
-Mỗi phiên test tạo một database tạm `loan_test_<hex>` trên instance cấu hình bởi biến môi trường
-LOAN_TEST_SQLSERVER (mặc định `localhost\\MSSQLSERVER02`, Windows Authentication), chạy migration,
-và xóa database khi kết thúc. Mỗi test bắt đầu với dữ liệu trống.
+Mỗi phiên test tạo một database tạm `loan_test_<hex>` trên máy chủ cấu hình bởi biến môi trường
+LOAN_TEST_MYSQL_URL (mặc định `mysql+pymysql://root@localhost:3306`), chạy migration, và xóa
+database khi kết thúc. Tài khoản trong URL cần toàn quyền trên `loan_test_%` và quyền CREATE USER
+(cho ST08). Mỗi test bắt đầu với dữ liệu trống.
 """
 
 import os
@@ -18,19 +19,20 @@ from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, create_engine, text
-from sqlalchemy.engine import URL
+from sqlalchemy.engine import URL, make_url
 
 from loan_system.adapters.cic import FakeCicGateway
 from loan_system.adapters.email import FakeEmailGateway
 from loan_system.adapters.payment import FakePaymentGateway
 from loan_system.adapters.sms import FakeSmsGateway
 from loan_system.config import Settings
+from loan_system.create_database import create_schema
 from loan_system.main import create_app
 
-SERVER = os.environ.get("LOAN_TEST_SQLSERVER", r"localhost\MSSQLSERVER02")
-ODBC_DRIVER = os.environ.get("LOAN_TEST_ODBC_DRIVER", "ODBC Driver 17 for SQL Server")
+SERVER = make_url(os.environ.get("LOAN_TEST_MYSQL_URL", "mysql+pymysql://root@localhost:3306"))
 # Xóa theo thứ tự khóa ngoại.
 # Không xóa roles, permissions, role_permissions: dữ liệu gốc do migration tạo sẵn theo ma trận RBAC.
+# Không xóa counters: bộ đếm mã hồ sơ vay và dòng khóa chuỗi nhật ký cũng do migration tạo.
 TABLES = [
     "sessions",
     "audit_logs",
@@ -58,26 +60,16 @@ TABLES = [
 ]
 
 
-def server_url(database: str) -> URL:
-    return URL.create(
-        "mssql+pyodbc",
-        host=SERVER,
-        database=database,
-        query={
-            "driver": ODBC_DRIVER,
-            "trusted_connection": "yes",
-            "Encrypt": "yes",
-            "TrustServerCertificate": "yes",
-        },
-    )
+def server_url(database: str | None) -> URL:
+    return SERVER.set(database=database).update_query_dict({"charset": "utf8mb4"})
 
 
 @pytest.fixture(scope="session")
 def database_url() -> Iterator[URL]:
     name = f"loan_test_{uuid.uuid4().hex[:12]}"
-    master = create_engine(server_url("master"), isolation_level="AUTOCOMMIT")
-    with master.connect() as conn:
-        conn.execute(text(f"CREATE DATABASE [{name}] COLLATE Vietnamese_100_CI_AS"))
+    server = create_engine(server_url(None), isolation_level="AUTOCOMMIT")
+    with server.connect() as conn:
+        create_schema(conn, name)
     url = server_url(name)
     try:
         engine = create_engine(url)
@@ -88,10 +80,9 @@ def database_url() -> Iterator[URL]:
         engine.dispose()
         yield url
     finally:
-        with master.connect() as conn:
-            conn.execute(text(f"ALTER DATABASE [{name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE"))
-            conn.execute(text(f"DROP DATABASE [{name}]"))
-        master.dispose()
+        with server.connect() as conn:
+            conn.execute(text(f"DROP DATABASE `{name}`"))
+        server.dispose()
 
 
 @pytest.fixture(scope="session")

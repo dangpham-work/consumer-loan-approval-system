@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from loan_system.adapters.sms import SmsGateway
 from loan_system.clock import Clock
 from loan_system.config import Settings
+from loan_system.repositories.atomic import increment, update_matched
 from loan_system.repositories.models import OtpChallenge
 from loan_system.security.crypto import FieldCipher
 from loan_system.security.secrets import keyed_hash, matches, new_otp
@@ -116,12 +117,9 @@ class OtpChallenges:
             self._db.commit()
             raise ChallengeFailed("Mã OTP đã hết hạn.")
         if not matches(self._settings.session_secret, otp, challenge.otp_hash):
-            attempts = self._db.execute(
-                update(OtpChallenge)
-                .where(OtpChallenge.id == challenge.id)
-                .values(failed_attempts=OtpChallenge.failed_attempts + 1)
-                .returning(OtpChallenge.failed_attempts)
-            ).scalar_one()
+            attempts = increment(
+                self._db, OtpChallenge.failed_attempts, OtpChallenge.id == challenge.id
+            )
             self._audit.log(
                 "OTP_FAIL", actor_id=confirmed_by, target_type="OTP_CHALLENGE",
                 target_id=challenge.id, ip_address=self._ip, level="WARNING", detail=purpose,
@@ -134,14 +132,14 @@ class OtpChallenges:
             raise ChallengeFailed("Mã OTP không đúng.")
         sealed = challenge.payload_enc  # đọc trước khi câu UPDATE dưới đây xóa nó
         # Cập nhật có điều kiện: hai yêu cầu xác nhận song song thì chỉ một yêu cầu thắng.
-        consumed = self._db.execute(
+        consumed = update_matched(
+            self._db,
             update(OtpChallenge)
             .where(OtpChallenge.id == challenge.id)
             .where(OtpChallenge.consumed_at.is_(None))
-            .values(consumed_at=now, payload_enc=None)
-            .returning(OtpChallenge.id)
-        ).first()
-        if consumed is None:
+            .values(consumed_at=now, payload_enc=None),
+        )
+        if not consumed:
             raise ChallengeFailed("Yêu cầu xác nhận không tồn tại hoặc đã được dùng.")
         if sealed is None:
             return {}

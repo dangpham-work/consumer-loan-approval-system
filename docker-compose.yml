@@ -1,38 +1,37 @@
 # Mô phỏng biểu đồ triển khai (mục 4.2.3) trên một máy. Mật khẩu lấy từ file .env (không commit).
 services:
-  sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+  mysql:
+    image: mysql:8.4
     environment:
-      ACCEPT_EULA: "Y"
-      MSSQL_PID: Developer
-      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?đặt MSSQL_SA_PASSWORD trong .env}
-      MSSQL_COLLATION: Vietnamese_100_CI_AS
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?đặt MYSQL_ROOT_PASSWORD trong .env}
     volumes:
-      - sqldata:/var/opt/mssql
+      - mysqldata:/var/lib/mysql
     networks: [data]
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' || exit 1"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
       interval: 10s
       timeout: 5s
       retries: 12
       start_period: 20s
-    # Không mở cổng 1433 ra ngoài: chỉ app truy cập qua mạng nội bộ "data".
+    # Không mở cổng 3306 ra ngoài: chỉ app truy cập qua mạng nội bộ "data".
 
   app:
     build: .
     environment:
       # Dựng URL từ thành phần để mật khẩu có ký tự đặc biệt không làm hỏng chuỗi kết nối.
-      DB_HOST: sqlserver
+      DB_HOST: mysql
       DB_NAME: loan_system
-      DB_USER: sa
-      DB_PASSWORD: ${MSSQL_SA_PASSWORD}
-      ODBC_DRIVER: ODBC Driver 18 for SQL Server
+      # Ứng dụng chạy bằng tài khoản quyền tối thiểu; root chỉ dùng cho create_database lúc khởi động.
+      DB_USER: loan_app
+      DB_PASSWORD: ${DB_PASSWORD:?đặt DB_PASSWORD trong .env}
+      DB_ADMIN_USER: root
+      DB_ADMIN_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       SESSION_SECRET: ${SESSION_SECRET:?}
       DATA_ENC_KEY: ${DATA_ENC_KEY:?}
       HMAC_INTEGRITY_KEY: ${HMAC_INTEGRITY_KEY:?}
       BLIND_INDEX_KEY: ${BLIND_INDEX_KEY:?}
     depends_on:
-      sqlserver:
+      mysql:
         condition: service_healthy
     restart: on-failure
     networks: [data, app]
@@ -45,4 +44,4 @@ networks:
   app: {}
 
 volumes:
-  sqldata: {}
+  mysqldata: {}

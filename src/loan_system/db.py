@@ -6,7 +6,9 @@ from sqlalchemy.orm import Session, sessionmaker
 
 
 def make_engine(database_url: URL) -> Engine:
-    return create_engine(database_url, pool_pre_ping=True)
+    # READ COMMITTED: sau khi chờ được khóa dòng, giao dịch đọc lại thấy dữ liệu giao dịch trước
+    # vừa commit. Mặc định REPEATABLE READ của MySQL giữ ảnh chụp cũ nên kiểm tra sau khóa sẽ sai.
+    return create_engine(database_url, pool_pre_ping=True, isolation_level="READ COMMITTED")
 
 
 def make_session_factory(engine: Engine) -> sessionmaker[Session]:

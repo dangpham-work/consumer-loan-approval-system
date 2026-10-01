@@ -4,7 +4,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import delete, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -13,6 +13,7 @@ from loan_system.clock import Clock
 from loan_system.config import Settings
 from loan_system.domain.access import CUSTOMER
 from loan_system.domain.eligibility import is_age_eligible
+from loan_system.repositories.atomic import increment
 from loan_system.repositories.models import Customer, RegistrationRequest, Role, User, UserRole
 from loan_system.security.secrets import hash_password, keyed_hash, matches, new_otp
 from loan_system.services.audit_service import AuditService
@@ -88,12 +89,10 @@ class RegistrationService:
         if not matches(self._settings.session_secret, otp, request.otp_hash):
             # Tăng bộ đếm bằng một câu UPDATE nguyên tử: gửi song song nhiều mã cũng không
             # vượt được giới hạn số lần thử.
-            attempts = self._db.execute(
-                update(RegistrationRequest)
-                .where(RegistrationRequest.id == request.id)
-                .values(failed_attempts=RegistrationRequest.failed_attempts + 1)
-                .returning(RegistrationRequest.failed_attempts)
-            ).scalar_one()
+            attempts = increment(
+                self._db, RegistrationRequest.failed_attempts,
+                RegistrationRequest.id == request.id,
+            )
             if attempts >= self._settings.otp_max_attempts:
                 self._cancel(request)
                 raise RegistrationFailed("Nhập sai OTP quá số lần cho phép. Yêu cầu đã bị hủy.")

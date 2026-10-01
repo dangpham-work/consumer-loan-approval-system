@@ -98,8 +98,8 @@ class ScoringService:
         """Chấm điểm một Hồ sơ vay đang ở "Hợp lệ"; trạng thái khác thì bỏ qua."""
         application = self._db.scalars(
             select(LoanApplication)
-            .with_hint(LoanApplication, "WITH (UPDLOCK, ROWLOCK)", "mssql")
             .where(LoanApplication.id == application_id)
+            .with_for_update()
             .execution_options(populate_existing=True)
         ).one_or_none()
         if application is None or application.status != ApplicationStatus.VERIFIED:

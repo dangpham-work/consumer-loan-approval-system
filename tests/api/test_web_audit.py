@@ -94,10 +94,11 @@ def test_st08_integrity_check_points_at_the_tampered_record(
     assert intact.status_code == 200
     assert "Chuỗi nhật ký toàn vẹn" in intact.text
 
-    # Kẻ có quyền quản trị CSDL (không phải app_rw, vốn bị DENY UPDATE) sửa một bản ghi cũ.
+    # Kẻ có quyền quản trị CSDL (không phải tài khoản ứng dụng, vốn không có quyền UPDATE) sửa
+    # một bản ghi cũ.
     with engine.connect() as conn:
         seq: int = conn.execute(text("SELECT MIN(seq) FROM audit_logs")).scalar_one()
-        conn.execute(text("UPDATE audit_logs SET detail = N'đã sửa' WHERE seq = :seq"),
+        conn.execute(text("UPDATE audit_logs SET detail = 'đã sửa' WHERE seq = :seq"),
                      {"seq": seq})
         conn.commit()
 
