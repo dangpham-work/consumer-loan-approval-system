@@ -51,7 +51,8 @@ def main() -> None:
     app_url, admin_url = settings.sqlalchemy_url(), settings.admin_url()
     database = _identifier(app_url.database, "database name")
 
-    server = create_engine(admin_url.set(database=None), isolation_level="AUTOCOMMIT")
+    # URL.set() bỏ qua giá trị None, nên phải dùng _replace để kết nối khi database chưa tồn tại.
+    server = create_engine(admin_url._replace(database=None), isolation_level="AUTOCOMMIT")
     with server.connect() as conn:
         create_schema(conn, database)
     command.upgrade(Config("alembic.ini"), "head")
