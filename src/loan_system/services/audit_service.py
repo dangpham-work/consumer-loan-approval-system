@@ -2,11 +2,12 @@
 
 import uuid
 
-from sqlalchemy import text
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from loan_system.clock import Clock
 from loan_system.domain.audit import GENESIS_HASH, AuditContent, compute_hash
+from loan_system.repositories.counters import lock_audit_chain
 from loan_system.repositories.models import AuditLog
 from loan_system.security.rate_limit import SlidingWindowLimiter
 
@@ -30,9 +31,10 @@ class AuditService:
         level: str = "INFO",
         detail: str | None = None,
     ) -> None:
-        # Khóa bản ghi cuối đến hết giao dịch để hai giao dịch không cùng nối vào một prev_hash.
+        # Khóa chuỗi đến hết giao dịch để hai giao dịch không cùng nối vào một prev_hash.
+        lock_audit_chain(self._db)
         last = self._db.execute(
-            text("SELECT TOP 1 seq, hash FROM audit_logs WITH (UPDLOCK, HOLDLOCK) ORDER BY seq DESC")
+            select(AuditLog.seq, AuditLog.hash).order_by(AuditLog.seq.desc()).limit(1)
         ).one_or_none()
         seq, prev_hash = (last.seq + 1, last.hash) if last else (1, GENESIS_HASH)
         content = AuditContent(

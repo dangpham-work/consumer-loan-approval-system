@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Vay tín chấp tiêu dùng{% endblock %}
+{% block shell %}
+<header class="site-header">
+  <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span>Vay tín dụng tiêu dùng</a>
+  <nav aria-label="Tài khoản">
+    <a href="/app/login">Đăng nhập</a>
+    <a class="button" href="/app/register">Đăng ký</a>
+  </nav>
+</header>
+<main id="main">
+  <section class="hero">
+    <div class="hero-text">
+      <h1>Vay tín chấp từ {{ (min_amount / 1000000) | int }} đến {{ (max_amount / 1000000) | int }} triệu đồng, không cần tài sản bảo đảm.</h1>
+      <p>Nộp hồ sơ vay trực tuyến, theo dõi từng bước xét duyệt và trả góp trong {{ min_term }} đến {{ max_term }} tháng.</p>
+      <p class="hero-actions">
+        <a class="button" href="/app/register">Đăng ký để nộp hồ sơ vay</a>
+        <a href="/app/login">Tôi đã có tài khoản</a>
+      </p>
+    </div>
+    <form class="card estimator" method="get" action="/" data-estimate data-ceiling-rate="{{ ceiling_rate }}">
+      <h2>Ước tính số tiền trả hằng tháng</h2>
+      <label>Số tiền vay (đồng)
+        <input type="number" name="requested_amount" value="30000000" min="{{ min_amount }}" max="{{ max_amount }}" step="1000000">
+      </label>
+      <label>Kỳ hạn (tháng)
+        <input type="number" name="term_months" value="12" min="{{ min_term }}" max="{{ max_term }}">
+      </label>
+      <p class="estimate">Trả hằng tháng khoảng <strong data-estimate-output>—</strong></p>
+      <p class="muted">Ước tính theo lãi suất trần {{ (ceiling_rate * 100) | int }}%/năm, trả đều gốc và lãi mỗi kỳ. Lãi suất chính thức phụ thuộc kết quả chấm điểm tín dụng và có thể thấp hơn.</p>
+      <a class="button" href="/app/register">Bắt đầu nộp hồ sơ vay</a>
+    </form>
+  </section>
+
+  <section class="band">
+    <h2>Một khoản vay đi qua những bước nào</h2>
+    <ol class="journey journey-wide">
+      <li><strong>Nộp hồ sơ vay</strong>Điền thông tin khoản vay, tài chính và tải giấy tờ trong 4 bước, trực tuyến hoặc tại quầy.</li>
+      <li><strong>Chấm điểm và thẩm định</strong>Hệ thống chấm điểm tín dụng, chuyên viên thẩm định lập tờ trình.</li>
+      <li><strong>Phê duyệt</strong>Quản lý phê duyệt quyết định; khoản vay trên 50 triệu đồng cần hai người đồng ý.</li>
+      <li><strong>Giải ngân</strong>Tiền được chuyển vào tài khoản bạn đã khai, kèm hợp đồng vay và lịch trả nợ.</li>
+      <li><strong>Trả nợ và tất toán</strong>Thanh toán từng kỳ trực tuyến hoặc tại quầy, tất toán trước hạn bất cứ lúc nào.</li>
+    </ol>
+  </section>
+
+  <section class="band band-split">
+    <div>
+      <h2>Điều kiện vay</h2>
+      <dl class="summary">
+        <dt>Độ tuổi</dt><dd>Từ {{ min_age }} đến {{ max_age }} tuổi</dd>
+        <dt>Số tiền vay</dt><dd>{{ min_amount | money }} đến {{ max_amount | money }}</dd>
+        <dt>Kỳ hạn</dt><dd>{{ min_term }} đến {{ max_term }} tháng</dd>
+        <dt>Tỷ lệ trả nợ trên thu nhập</dt><dd>Không quá 50% sau khi vay</dd>
+        <dt>Số khoản vay cùng lúc</dt><dd>Một hồ sơ vay hoặc một khoản vay chưa tất toán</dd>
+      </dl>
+    </div>
+    <div>
+      <h2>Giấy tờ cần chuẩn bị</h2>
+      <ul class="checklist">
+        {% for doc_type in document_types %}<li>{{ DOCUMENT_TYPES[doc_type] }}</li>{% endfor %}
+      </ul>
+      <p class="muted">Ảnh JPG, PNG hoặc file PDF. Cần thêm số CCCD và số tài khoản nhận tiền.</p>
+    </div>
+  </section>
+
+  <section class="band">
+    <h2>Dữ liệu của bạn được bảo vệ thế nào</h2>
+    <ul class="assurances">
+      <li><strong>Mã hóa thông tin nhạy cảm</strong>Số CCCD và thu nhập được mã hóa khi lưu, và che trên màn hình của nhân viên cho đến khi họ có lý do xem.</li>
+      <li><strong>Mỗi bước một người khác nhau</strong>Người tiếp nhận, thẩm định, phê duyệt và giải ngân của cùng một hồ sơ vay phải là những người khác nhau.</li>
+      <li><strong>Mọi thao tác đều để lại dấu vết</strong>Nhật ký kiểm toán ghi lại từng lượt xem và thay đổi, và không thể sửa mà không bị phát hiện.</li>
+    </ul>
+  </section>
+</main>
+<footer class="site-footer">
+  <p>Hệ thống quản lý và xét duyệt vay tín dụng tiêu dùng. Đồ án môn học, công ty tài chính giả định.</p>
+  <p><a href="/app/login">Đăng nhập dành cho khách hàng và nhân viên</a></p>
+</footer>
+{% endblock %}

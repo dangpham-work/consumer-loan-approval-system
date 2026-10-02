@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from loan_system.clock import Clock
 from loan_system.config import Settings
 from loan_system.domain.access import MIN_PASSWORD_LENGTH, AccountStatus
+from loan_system.repositories.atomic import increment, update_matched
 from loan_system.repositories.models import (
     Permission,
     Role,
@@ -164,12 +165,7 @@ class AuthService:
         Sai mật khẩu và sai mã TOTP dùng chung bộ đếm, và bộ đếm chỉ về 0 khi đăng nhập xong hẳn:
         biết mật khẩu mà đoán mã TOTP qua nhiều lần đăng nhập vẫn bị khóa sau 5 lần sai (SR01).
         """
-        failures = self._db.execute(
-            update(User)
-            .where(User.id == user.id)
-            .values(failed_attempts=User.failed_attempts + 1)
-            .returning(User.failed_attempts)
-        ).scalar_one()
+        failures = increment(self._db, User.failed_attempts, User.id == user.id)
         if failures < self._settings.login_max_failures:
             return False
         self._db.execute(
@@ -305,20 +301,17 @@ class AuthService:
         secret = self._cipher.decrypt(user.totp_secret_enc, context=totp_context(user.id))
         step = verify_totp(secret, code, self._clock.now(), user.totp_last_step)
         # Cập nhật có điều kiện: hai yêu cầu song song cùng một mã thì chỉ một yêu cầu thắng.
-        if step is not None and self._db.execute(
+        if step is not None and update_matched(
+            self._db,
             update(User)
             .where(User.id == user.id)
             .where(or_(User.totp_last_step.is_(None), User.totp_last_step < step))
-            .values(totp_last_step=step)
-            .returning(User.id)
-        ).first() is not None:
+            .values(totp_last_step=step),
+        ):
             return
-        attempts = self._db.execute(
-            update(UserSession)
-            .where(UserSession.id == session.id)
-            .values(otp_failed_attempts=UserSession.otp_failed_attempts + 1)
-            .returning(UserSession.otp_failed_attempts)
-        ).scalar_one()
+        attempts = increment(
+            self._db, UserSession.otp_failed_attempts, UserSession.id == session.id
+        )
         self._audit.log(
             "OTP_FAIL", actor_id=user.id, target_type="USER", target_id=user.id,
             ip_address=self._ip, level="WARNING",

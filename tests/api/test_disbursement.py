@@ -2,6 +2,7 @@
 #10); xử lý hồ sơ vay LOCKED và giải ngân FAILED (ticket #11)."""
 
 import hashlib
+import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from decimal import Decimal
@@ -97,25 +98,27 @@ def test_tc01_grade_b_loan_approved_by_one_manager_is_disbursed_with_its_schedul
 
 @contextmanager
 def trigger_disabled(engine: Engine) -> Iterator[None]:
-    """Kẻ tấn công có quyền quản trị CSDL tắt trigger BR07 trước khi sửa (ST04)."""
-    with engine.begin() as conn:
-        conn.execute(text(
-            "DISABLE TRIGGER trg_loan_applications_approved_immutable ON loan_applications"
-        ))
+    """Kẻ tấn công có quyền quản trị CSDL gỡ trigger BR07 trước khi sửa (ST04).
+
+    MySQL không có lệnh tắt trigger: gỡ bỏ rồi tạo lại đúng câu lệnh gốc.
+    """
+    with engine.connect() as conn:
+        definition: str = conn.execute(
+            text("SHOW CREATE TRIGGER trg_loan_applications_approved_immutable")
+        ).mappings().one()["SQL Original Statement"]
+        conn.execute(text("DROP TRIGGER trg_loan_applications_approved_immutable"))
     try:
         yield
     finally:
-        with engine.begin() as conn:
-            conn.execute(text(
-                "ENABLE TRIGGER trg_loan_applications_approved_immutable ON loan_applications"
-            ))
+        with engine.connect() as conn:
+            conn.exec_driver_sql(definition)
 
 
 def tamper_requested_amount(engine: Engine, app_id: str) -> None:
     with engine.begin() as conn:
         conn.execute(
             text("UPDATE loan_applications SET requested_amount = 90000000 WHERE id = :id"),
-            {"id": app_id},
+            {"id": uuid.UUID(app_id).hex},  # cột UUID lưu dạng CHAR(32)
         )
 
 

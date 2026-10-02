@@ -7,11 +7,12 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, text
+from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.exc import DBAPIError
 
 from loan_system.adapters.email import FakeEmailGateway
 from loan_system.adapters.sms import FakeSmsGateway
+from loan_system.create_database import grant_app_privileges
 from tests.api.staff import bootstrap_admin, otp
 from tests.api.test_login_lockout import WRONG, login
 from tests.api.workflow import Team, customer_browser, submitted_application
@@ -127,28 +128,31 @@ def test_revealing_pii_past_the_threshold_raises_a_critical_alert(
     assert len(views) == 21
 
 
-def test_st08_app_rw_is_denied_update_and_delete_on_audit_logs(
+def test_st08_app_account_is_denied_update_and_delete_on_append_only_tables(
     client: TestClient, clock: FakeClock, email: FakeEmailGateway, engine: Engine
 ) -> None:
-    """4.1.2e: DENY UPDATE, DELETE cho app_rw trên audit_logs; kiểm tra bằng SQL Server thật."""
+    """4.1.2e: tài khoản ứng dụng chỉ có SELECT, INSERT trên audit_logs và approval_decisions;
+    kiểm tra bằng một tài khoản MySQL thật được cấp quyền đúng như tài khoản ứng dụng."""
     bootstrap_admin(client, clock)  # ghi ít nhất một bản ghi nhật ký (USER_CREATE)
+    database = engine.url.database
+    assert database is not None
 
-    probe = f"probe_{uuid.uuid4().hex[:8]}"
+    probe = {"user": f"probe_{uuid.uuid4().hex[:8]}", "host": "%", "password": uuid.uuid4().hex}
     with engine.connect() as setup:
-        setup = setup.execution_options(isolation_level="AUTOCOMMIT")
-        setup.execute(text(f"CREATE USER [{probe}] WITHOUT LOGIN"))
-        setup.execute(text(f"ALTER ROLE app_rw ADD MEMBER [{probe}]"))
-        setup.execute(text(f"GRANT SELECT, INSERT ON dbo.audit_logs TO [{probe}]"))
+        setup.execute(text("CREATE USER :user@:host IDENTIFIED BY :password"), probe)
+        grant_app_privileges(setup, database, probe["user"], probe["host"])
 
     with engine.connect() as check:
         before = check.execute(
-            text("SELECT TOP 1 seq, action FROM audit_logs ORDER BY seq")
+            text("SELECT seq, action FROM audit_logs ORDER BY seq LIMIT 1")
         ).one()
 
+    probe_engine = create_engine(
+        engine.url.set(username=probe["user"], password=probe["password"]),
+        isolation_level="AUTOCOMMIT",
+    )
     try:
-        conn = engine.connect().execution_options(isolation_level="AUTOCOMMIT")
-        try:
-            conn.execute(text(f"EXECUTE AS USER = '{probe}'"))
+        with probe_engine.connect() as conn:
             with pytest.raises(DBAPIError):
                 conn.execute(
                     text("UPDATE audit_logs SET action = 'TAMPERED' WHERE seq = :seq"),
@@ -156,25 +160,23 @@ def test_st08_app_rw_is_denied_update_and_delete_on_audit_logs(
                 )
             with pytest.raises(DBAPIError):
                 conn.execute(text("DELETE FROM audit_logs WHERE seq = :seq"), {"seq": before.seq})
-            # Chỉ ghi thêm bị từ chối; ghi mới (INSERT) vẫn được phép cho vai trò app_rw.
+            with pytest.raises(DBAPIError):
+                conn.execute(text("UPDATE approval_decisions SET comment = 'TAMPERED'"))
+            with pytest.raises(DBAPIError):
+                conn.execute(text("DELETE FROM approval_decisions"))
+            # Chỉ sửa và xóa bị từ chối; ghi mới (INSERT) vẫn được phép cho tài khoản ứng dụng.
             conn.execute(
                 text(
                     "INSERT INTO audit_logs (seq, action, level, created_at, prev_hash, hash) "
-                    "VALUES (999999, 'PROBE_INSERT', 'INFO', SYSDATETIMEOFFSET(), "
-                    "REPLICATE('0', 64), REPLICATE('1', 64))"
+                    "VALUES (999999, 'PROBE_INSERT', 'INFO', UTC_TIMESTAMP(6), "
+                    "REPEAT('0', 64), REPEAT('1', 64))"
                 )
             )
-        finally:
-            try:
-                conn.execute(text("REVERT"))
-            except DBAPIError:
-                pass
-            conn.close()
     finally:
-        # Dọn dẹp cả khi assertion ở trên thất bại, để không để lại principal thừa trong DB test.
+        # Dọn dẹp cả khi assertion ở trên thất bại, để không để lại tài khoản thừa trên máy chủ test.
+        probe_engine.dispose()
         with engine.connect() as cleanup:
-            cleanup = cleanup.execution_options(isolation_level="AUTOCOMMIT")
-            cleanup.execute(text(f"DROP USER [{probe}]"))
+            cleanup.execute(text("DROP USER :user@:host"), probe)
 
     with engine.connect() as check:
         unchanged: str = check.execute(

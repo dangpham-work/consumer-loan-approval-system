@@ -18,5 +18,6 @@ existing = context.config.attributes.get("connection")
 if existing is not None:
     run(existing)
 else:
-    with create_engine(Settings().sqlalchemy_url()).connect() as connection:
+    # Tài khoản ứng dụng không có quyền DDL; migration chạy bằng tài khoản quản trị.
+    with create_engine(Settings().admin_url()).connect() as connection:
         run(connection)

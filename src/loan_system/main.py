@@ -3,9 +3,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 
 from loan_system.adapters.cic import CicGateway, FakeCicGateway
-from loan_system.adapters.email import EmailGateway, FakeEmailGateway
+from loan_system.adapters.email import ConsoleEmailGateway, EmailGateway, FakeEmailGateway
 from loan_system.adapters.payment import FakePaymentGateway, PaymentGateway
-from loan_system.adapters.sms import FakeSmsGateway, SmsGateway
+from loan_system.adapters.sms import ConsoleSmsGateway, FakeSmsGateway, SmsGateway
 from loan_system.api import (
     admin,
     applications,
@@ -43,8 +43,10 @@ def create_app(
         settings=settings,
         clock=clock,
         # CIC, SMS, email, cổng thanh toán đều là giả lập
-        sms=sms or FakeSmsGateway(),
-        email=email or FakeEmailGateway(),
+        sms=sms or (ConsoleSmsGateway() if settings.dev_echo_messages else FakeSmsGateway()),
+        email=email or (
+            ConsoleEmailGateway() if settings.dev_echo_messages else FakeEmailGateway()
+        ),
         cic=cic or FakeCicGateway(),
         payments=payments or FakePaymentGateway(),
         session_factory=make_session_factory(make_engine(settings.sqlalchemy_url())),

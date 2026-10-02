@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field, errors with context %}
+{% block title %}Hồ sơ vay bị khóa{% endblock %}
+{% block content %}
+<h1>Hồ sơ vay bị khóa</h1>
+<p class="muted">Hồ sơ vay bị khóa khi dữ liệu không còn khớp với quyết định phê duyệt. Hồ sơ vay bị khóa không bao giờ được giải ngân: sau khi điều tra xong, hủy hồ sơ vay và ghi lý do. Mỗi lần hủy được ghi nhật ký kiểm toán (APPLICATION_LOCK_RESOLVE).</p>
+{{ errors(error, field_errors or ()) }}
+{% for a in applications %}
+<section class="card">
+  <div class="heading">
+    <h2>Hồ sơ vay {{ a.code }}</h2>
+    <a href="/app/audit?action=INTEGRITY_FAIL">Xem nhật ký toàn vẹn</a>
+  </div>
+  <dl class="summary">
+    <dt>Khách hàng</dt><dd>{{ a.customer_name }}</dd>
+    <dt>Số tiền vay</dt><dd>{{ a.requested_amount | money }}</dd>
+    <dt>Kỳ hạn</dt><dd>{{ a.term_months }} tháng</dd>
+    <dt>Ngày nộp</dt><dd>{{ a.submitted_at | moment }}</dd>
+  </dl>
+  <form method="post" action="/app/locked/{{ a.id }}/resolve" data-confirm="Hủy hồ sơ vay {{ a.code }}? Thao tác không thể hoàn tác.">
+    {{ csrf_field() }}
+    <label>Kết luận điều tra, lý do hủy (10 đến 200 ký tự)
+      <textarea name="reason" minlength="10" maxlength="200" required>{{ reason if failed_id == a.id else "" }}</textarea>
+    </label>
+    <button type="submit" class="danger">Hủy hồ sơ vay bị khóa</button>
+  </form>
+</section>
+{% else %}
+<section class="card">
+  <p>Không có hồ sơ vay nào đang bị khóa.</p>
+</section>
+{% endfor %}
+{% endblock %}

@@ -7,12 +7,13 @@ nhập, để không bị lợi dụng giả mạo lừa đảo (UC30).
 import uuid
 from collections.abc import Collection
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from loan_system.adapters.sms import SmsGateway
 from loan_system.clock import Clock
 from loan_system.domain.access import CREDIT_OFFICER, AccountStatus
+from loan_system.repositories.atomic import update_matched
 from loan_system.repositories.models import Notification, Role, User, UserRole
 
 MAX_LISTED = 50
@@ -108,14 +109,31 @@ class NotificationService:
             )
         )
 
+    def unread_count(self, user_id: uuid.UUID) -> int:
+        return self._db.scalar(
+            select(func.count())
+            .select_from(Notification)
+            .where(Notification.recipient_user_id == user_id)
+            .where(Notification.is_read == False)
+        ) or 0
+
+    def mark_all_read(self, user_id: uuid.UUID) -> None:
+        self._db.execute(
+            update(Notification)
+            .where(Notification.recipient_user_id == user_id)
+            .where(Notification.is_read == False)
+            .values(is_read=True)
+        )
+        self._db.commit()
+
     def mark_read(self, user_id: uuid.UUID, notification_id: uuid.UUID) -> bool:
         """Chỉ đánh dấu thông báo của chính người gọi (SR04)."""
-        updated = self._db.execute(
+        updated = update_matched(
+            self._db,
             update(Notification)
             .where(Notification.id == notification_id)
             .where(Notification.recipient_user_id == user_id)
-            .values(is_read=True)
-            .returning(Notification.id)
-        ).first()
+            .values(is_read=True),
+        )
         self._db.commit()
-        return updated is not None
+        return updated

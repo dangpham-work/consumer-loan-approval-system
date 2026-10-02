@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field, errors with context %}
+{% block title %}Xác nhận đổi thông tin liên hệ{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Xác nhận đổi thông tin liên hệ</h1>
+  <p>Mã OTP đã được gửi tới số điện thoại hiện tại của bạn.</p>
+  {{ errors(error) }}
+  <form method="post" action="/app/profile/contact/confirm">
+    {{ csrf_field() }}
+    <input type="hidden" name="challenge_id" value="{{ challenge_id }}">
+    <label>Mã OTP
+      <input name="otp" inputmode="numeric" pattern="\d{6}" maxlength="6" autocomplete="one-time-code" required autofocus>
+    </label>
+    <button type="submit">Xác nhận</button>
+  </form>
+  <p><a href="/app/profile">Quay lại thông tin cá nhân</a></p>
+</section>
+{% endblock %}

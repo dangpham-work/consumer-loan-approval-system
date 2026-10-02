@@ -1,8 +1,8 @@
 """Chuỗi băm của nhật ký kiểm toán (SR09).
 
 hash = SHA256(prev_hash ‖ seq ‖ nội dung chuẩn hóa). Bản ghi đầu tiên (seq 1) nối vào GENESIS_HASH.
-`seq` do ứng dụng cấp trong cùng giao dịch ghi nhật ký nên liên tục tuyệt đối, khác với IDENTITY
-của SQL Server vốn có thể nhảy số khi giao dịch bị hoàn tác hoặc máy chủ khởi động lại.
+`seq` do ứng dụng cấp trong cùng giao dịch ghi nhật ký nên liên tục tuyệt đối, khác với
+AUTO_INCREMENT của MySQL vốn có thể nhảy số khi giao dịch bị hoàn tác.
 """
 
 import hashlib

@@ -434,7 +434,7 @@ class PaymentService:
         if user.customer_id is not None:
             query = query.where(Loan.customer_id == user.customer_id)
         if lock:
-            query = query.with_hint(Loan, "WITH (UPDLOCK, ROWLOCK)", "mssql")
+            query = query.with_for_update()
         loan = self._db.scalars(query.execution_options(populate_existing=True)).one_or_none()
         if loan is None:
             self._db.rollback()
@@ -447,7 +447,7 @@ class PaymentService:
         """Mọi kỳ của khoản vay, kể cả Đã hủy (hiển thị đầy đủ ở M04; loại trừ khi phân bổ)."""
         query = select(Installment).where(Installment.loan_id == loan_id).order_by(Installment.number)
         if lock:
-            query = query.with_hint(Installment, "WITH (UPDLOCK, ROWLOCK)", "mssql")
+            query = query.with_for_update()
         return list(self._db.scalars(query.execution_options(populate_existing=True)).all())
 
     def _by_ref(self, external_ref: str) -> Payment | None:

@@ -12,12 +12,19 @@ class Settings(BaseSettings):
     # Cách 1: một chuỗi kết nối đầy đủ. Cách 2 (khi để trống): dựng từ các thành phần DB_*,
     # để mật khẩu chứa ký tự đặc biệt (@ # / :) không phải mã hóa URL thủ công.
     database_url: str = ""
-    db_host: str = "localhost\\MSSQLSERVER02"
+    db_host: str = "localhost"
+    db_port: int = 3306
     db_name: str = "loan_system"
-    db_user: str = ""  # để trống = Windows Authentication
+    db_user: str = "loan_app"
     db_password: str = ""
-    odbc_driver: str = "ODBC Driver 17 for SQL Server"
-    db_trust_server_certificate: bool = True
+    # Tài khoản quản trị chỉ dùng cho create_database và migration (ADR 0004): tạo database, tạo
+    # tài khoản ứng dụng và cấp quyền theo từng bảng. Để trống cả hai cách thì dùng luôn tài khoản
+    # ứng dụng (một tài khoản, không tách đặc quyền).
+    database_admin_url: str = ""
+    db_admin_user: str = ""
+    db_admin_password: str = ""
+    # Máy được phép kết nối bằng tài khoản ứng dụng ('%' = mọi máy, 'localhost' = chỉ máy CSDL).
+    db_app_host: str = "%"
 
     # Bốn khóa bí mật tách biệt (mục 4.2.5 đề cương). Giá trị mặc định chỉ dùng cho môi trường dev.
     session_secret: str = "dev-only-session-secret-change-me"
@@ -28,6 +35,9 @@ class Settings(BaseSettings):
     # {"1": "..."}) để vẫn kiểm tra được snapshot của hồ sơ vay đã duyệt bằng khóa cũ.
     hmac_integrity_key_version: int = 1
     hmac_integrity_old_keys: dict[int, str] = {}
+
+    # Chỉ cho môi trường dev: ghi SMS (mã OTP) và email (mật khẩu tạm) giả lập ra log máy chủ.
+    dev_echo_messages: bool = False
 
     session_idle_minutes: int = 15  # SR11
     otp_ttl_minutes: int = 5
@@ -56,20 +66,28 @@ class Settings(BaseSettings):
     cic_reuse_days: int = 30  # UC19 1a
 
     def sqlalchemy_url(self) -> URL:
+        """Kết nối của ứng dụng lúc chạy: tài khoản quyền tối thiểu."""
         if self.database_url:
             return make_url(self.database_url)
-        query = {
-            "driver": self.odbc_driver,
-            "Encrypt": "yes",
-            "TrustServerCertificate": "yes" if self.db_trust_server_certificate else "no",
-        }
-        if not self.db_user:
-            query["trusted_connection"] = "yes"
+        return self._component_url(self.db_user, self.db_password)
+
+    def admin_url(self) -> URL:
+        """Kết nối của create_database và migration; cùng database với ứng dụng."""
+        if self.database_admin_url:
+            return make_url(self.database_admin_url).set(database=self.sqlalchemy_url().database)
+        if self.db_admin_user:
+            return self._component_url(self.db_admin_user, self.db_admin_password).set(
+                database=self.sqlalchemy_url().database
+            )
+        return self.sqlalchemy_url()
+
+    def _component_url(self, user: str, password: str) -> URL:
         return URL.create(
-            "mssql+pyodbc",
-            username=self.db_user or None,
-            password=self.db_password or None,
+            "mysql+pymysql",
+            username=user,
+            password=password or None,
             host=self.db_host,
+            port=self.db_port,
             database=self.db_name,
-            query=query,
+            query={"charset": "utf8mb4"},
         )

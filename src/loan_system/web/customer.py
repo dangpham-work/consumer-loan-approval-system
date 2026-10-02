@@ -14,14 +14,21 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, status
 from fastapi.responses import HTMLResponse, RedirectResponse
+from pydantic import BaseModel
 
 from loan_system.api.access import Auth
 from loan_system.api.applications import (
     Applications,
+    ConsentConfirmation,
     CreateApplicationRequest,
     UpdateDraftRequest,
 )
-from loan_system.api.customers import Customers, UpdateProfileRequest
+from loan_system.api.customers import (
+    Customers,
+    EmailChangeRequest,
+    PhoneChangeRequest,
+    UpdateProfileRequest,
+)
 from loan_system.api.deps import Ctx
 from loan_system.api.payments import Payments
 from loan_system.domain.applications import (
@@ -50,7 +57,8 @@ from loan_system.services.application_service import (
     TooManyDocuments,
 )
 from loan_system.services.auth_service import CurrentUser
-from loan_system.services.customer_service import IncomeLocked, ProfileChanges
+from loan_system.services.customer_service import ContactTaken, IncomeLocked, ProfileChanges
+from loan_system.services.otp_challenge_service import ChallengeFailed
 from loan_system.web.labels import ITEMS
 from loan_system.web.pages import (
     ERROR_MESSAGES,
@@ -59,6 +67,7 @@ from loan_system.web.pages import (
     Entry,
     PageError,
     PageUser,
+    code_of,
     message_of,
     redirect,
     render,
@@ -446,3 +455,68 @@ def update_profile(
     except IncomeLocked as exc:
         return failed(status.HTTP_409_CONFLICT, error=message_of(exc))
     return redirect(f"{PREFIX}/profile?notice=profile_saved")
+
+# --- Đổi số điện thoại, email (UC10): xác nhận bằng OTP gửi tới số điện thoại hiện tại ----------
+
+CONTACT_FIELDS: dict[str, tuple[type[BaseModel], str, str]] = {
+    "phone": (PhoneChangeRequest, "new_phone", "Số điện thoại gồm 10 chữ số, bắt đầu bằng 0."),
+    "email": (EmailChangeRequest, "new_email", "Email không hợp lệ."),
+}
+OTP_ERRORS = {"otp": "Mã OTP gồm 6 chữ số.", "challenge_id": ERROR_MESSAGES[400]}
+
+
+def _contact_otp_page(
+    request: Request, user: CurrentUser, challenge_id: str,
+    status_code: int = status.HTTP_200_OK, **context: Any,
+) -> HTMLResponse:
+    return render(request, "profile_otp.html", {"challenge_id": challenge_id, **context},
+                  user=user, status_code=status_code)
+
+
+@router.post("/profile/contact", dependencies=[Csrf], response_class=HTMLResponse)
+def start_contact_change(
+    request: Request, user: ProfilePage, customers: Customers,
+    field: Entry = "", new_value: Entry = "",
+) -> HTMLResponse:
+    if field not in CONTACT_FIELDS:
+        raise PageError(status.HTTP_400_BAD_REQUEST)
+    model, key, message = CONTACT_FIELDS[field]
+
+    def failed(code: int, **context: Any) -> HTMLResponse:
+        return render(request, "profile.html",
+                      {"profile": customers.view_self(user),
+                       "contact": {field: new_value}, **context},
+                      user=user, status_code=code)
+
+    body, field_errors = validate(model, {key: new_value.strip()}, {key: message})
+    if body is None:
+        return failed(status.HTTP_400_BAD_REQUEST, contact_errors=field_errors)
+    try:
+        challenge_id = customers.start_contact_change(
+            user, "phone" if field == "phone" else "email", str(getattr(body, key))
+        )
+    except ContactTaken as exc:
+        return failed(status.HTTP_409_CONFLICT, contact_errors=[message_of(exc)])
+    return _contact_otp_page(request, user, str(challenge_id))
+
+
+@router.post("/profile/contact/confirm", dependencies=[Csrf], response_model=None)
+def confirm_contact_change(
+    request: Request, user: ProfilePage, customers: Customers, ctx: Ctx,
+    challenge_id: Entry = "", otp: Entry = "",
+) -> HTMLResponse | RedirectResponse:
+    if not ctx.limits.otp.hit(str(user.user_id)):
+        return _contact_otp_page(request, user, challenge_id,
+                                 status.HTTP_429_TOO_MANY_REQUESTS, error=TOO_MANY)
+    body, field_errors = validate(
+        ConsentConfirmation, {"challenge_id": challenge_id, "otp": otp.strip()}, OTP_ERRORS
+    )
+    if body is None:
+        return _contact_otp_page(request, user, challenge_id, status.HTTP_400_BAD_REQUEST,
+                                 error=field_errors[0])
+    try:
+        customers.confirm_contact_change(user, body.challenge_id, body.otp)
+    except (ChallengeFailed, ContactTaken) as exc:
+        return _contact_otp_page(request, user, challenge_id, code_of(exc),
+                                 error=message_of(exc))
+    return redirect(f"{PREFIX}/profile?notice=contact_saved")

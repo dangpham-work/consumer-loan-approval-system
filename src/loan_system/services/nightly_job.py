@@ -159,16 +159,14 @@ class NightlyJob:
                 batch.commit()
 
     def _process_loan(self, batch: _Batch, loan_id: uuid.UUID, today: date) -> None:
-        loan = batch.db.scalars(
-            select(Loan).with_hint(Loan, "WITH (UPDLOCK, ROWLOCK)", "mssql").where(Loan.id == loan_id)
-        ).one()
+        loan = batch.db.scalars(select(Loan).where(Loan.id == loan_id).with_for_update()).one()
         installments = batch.db.scalars(
             select(Installment)
-            .with_hint(Installment, "WITH (UPDLOCK, ROWLOCK)", "mssql")
             .where(Installment.loan_id == loan_id)
             .where(Installment.status.in_(UNPAID_INSTALLMENT))
             .where(Installment.due_date < today)
             .order_by(Installment.number)
+            .with_for_update()
         ).all()
         code = batch.loan_code(loan)
         max_days = 0
@@ -261,8 +259,8 @@ class NightlyJob:
             with self._sessions() as db:
                 application = db.scalars(
                     select(LoanApplication)
-                    .with_hint(LoanApplication, "WITH (UPDLOCK, ROWLOCK)", "mssql")
                     .where(LoanApplication.id == application_id)
+                    .with_for_update()
                 ).one()
                 # Khách hàng vừa bổ sung xong ngay trước khi tác vụ khóa được hồ sơ vay.
                 if application.status != ApplicationStatus.NEED_INFO:
