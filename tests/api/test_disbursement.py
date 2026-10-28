@@ -111,7 +111,8 @@ def trigger_disabled(engine: Engine) -> Iterator[None]:
         yield
     finally:
         with engine.connect() as conn:
-            conn.exec_driver_sql(definition)
+            # DEFINER=`root`@`%` (MySQL chạy trong Docker): PyMySQL coi % là chỗ thay tham số.
+            conn.exec_driver_sql(definition.replace("%", "%%"))
 
 
 def tamper_requested_amount(engine: Engine, app_id: str) -> None:
@@ -119,6 +120,20 @@ def tamper_requested_amount(engine: Engine, app_id: str) -> None:
         conn.execute(
             text("UPDATE loan_applications SET requested_amount = 90000000 WHERE id = :id"),
             {"id": uuid.UUID(app_id).hex},  # cột UUID lưu dạng CHAR(32)
+        )
+
+
+def tamper_receiving_account(engine: Engine, app_id: str) -> None:
+    """Kẻ tấn công sửa bản mã tài khoản nhận (lật một bit) để chuyển hướng tiền giải ngân."""
+    row = {"id": uuid.UUID(app_id).hex}
+    with engine.begin() as conn:
+        sealed: bytes = conn.execute(
+            text("SELECT receiving_account_enc FROM loan_applications WHERE id = :id"), row
+        ).scalar_one()
+        forged = bytes(sealed[:-1]) + bytes([sealed[-1] ^ 0x01])
+        conn.execute(
+            text("UPDATE loan_applications SET receiving_account_enc = :v WHERE id = :id"),
+            {**row, "v": forged},
         )
 
 
@@ -154,6 +169,22 @@ def test_opening_the_disbursement_screen_also_checks_the_snapshot(
 
     assert team.disburser.client.get(f"/applications/{app_id}/disbursement").status_code == 409
     assert status_of(customer, app_id) == "LOCKED"
+
+
+def test_st04_tampered_receiving_account_ciphertext_locks_the_application(
+    team: Team, customer: TestClient, engine: Engine, payments: FakePaymentGateway
+) -> None:
+    auditor = team.auditor.client
+    app_id = approved(team, customer)
+    with trigger_disabled(engine):
+        tamper_receiving_account(engine, app_id)
+
+    assert team.disburser.client.get(f"/applications/{app_id}/disbursement").status_code == 409
+    assert status_of(customer, app_id) == "LOCKED"
+    assert customer.get(f"/applications/{app_id}").json()["receiving_account"] is None
+    assert payments.requests == []
+    [failure] = auditor.get("/audit/logs", params={"action": "INTEGRITY_FAIL"}).json()
+    assert (failure["level"], failure["target_id"]) == ("CRITICAL", app_id)
 
 
 def test_database_refuses_to_change_an_approved_application(
