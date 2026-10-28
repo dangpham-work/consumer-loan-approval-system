@@ -1,10 +1,59 @@
-"""Seam 2: mã hóa trường nhạy cảm AES-GCM (SR06) và blind index để tra cứu CCCD."""
+"""Seam 2: mã hóa trường nhạy cảm ChaCha20-Poly1305 (SR06, ADR 0005) và blind index để tra cứu CCCD."""
+
+import hashlib
+import os
 
 import pytest
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from loan_system.security.crypto import DecryptionFailed, FieldCipher, blind_index
 
 KEY = "khoa-du-lieu-chi-dung-trong-test-0123456789"
+
+
+def legacy_aes_gcm(plaintext: str, context: str) -> bytes:
+    """Bản mã định dạng 1 đúng như các bản ghi đã lưu trước ADR 0005."""
+    nonce = os.urandom(12)
+    key = hashlib.sha256(KEY.encode()).digest()
+    return bytes([1]) + nonce + AESGCM(key).encrypt(nonce, plaintext.encode(), context.encode())
+
+
+def test_new_values_use_the_chacha20_poly1305_format() -> None:
+    sealed = FieldCipher(KEY).encrypt("079095001234", context="x")
+
+    assert sealed[0] == 2
+    # 1 byte định dạng + 12 byte nonce + 12 byte ciphertext (bằng bản rõ) + 16 byte tag
+    assert len(sealed) == 1 + 12 + len("079095001234") + 16
+
+
+def test_values_stored_as_aes_gcm_still_decrypt() -> None:
+    sealed = legacy_aes_gcm("079095001234", "customers.national_id:1")
+
+    assert FieldCipher(KEY).decrypt(sealed, context="customers.national_id:1") == "079095001234"
+
+
+def test_legacy_value_with_wrong_context_is_rejected() -> None:
+    sealed = legacy_aes_gcm("079095001234", "customers.national_id:1")
+
+    with pytest.raises(DecryptionFailed):
+        FieldCipher(KEY).decrypt(sealed, context="customers.national_id:2")
+
+
+@pytest.mark.parametrize("forged_format", [0, 1, 3, 255])
+def test_changing_the_format_byte_is_rejected(forged_format: int) -> None:
+    cipher = FieldCipher(KEY)
+    sealed = bytearray(cipher.encrypt("0123456789", context="x"))
+    sealed[0] = forged_format
+
+    with pytest.raises(DecryptionFailed):
+        cipher.decrypt(bytes(sealed), context="x")
+
+
+def test_empty_or_truncated_value_is_rejected() -> None:
+    cipher = FieldCipher(KEY)
+    for data in (b"", bytes([2]), cipher.encrypt("0123456789", context="x")[:13]):
+        with pytest.raises(DecryptionFailed):
+            cipher.decrypt(data, context="x")
 
 
 def test_encrypted_value_round_trips_and_hides_the_plaintext() -> None:
