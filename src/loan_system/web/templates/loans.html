@@ -22,6 +22,9 @@
   </tbody>
 </table>
 {% else %}
-<p>Bạn không có khoản vay nào đang trả.</p>
+<section class="card empty">
+  <img src="{{ url_for('static', path='img/step-repay.webp') }}" alt="" width="480" height="360">
+  <p>Bạn không có khoản vay nào đang trả.</p>
+</section>
 {% endif %}
 {% endblock %}

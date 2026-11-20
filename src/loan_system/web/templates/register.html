@@ -3,6 +3,7 @@
 {% block title %}Đăng ký tài khoản{% endblock %}
 {% block content %}
 <section class="card narrow">
+  <img class="card-art" src="{{ url_for('static', path='img/step-apply.webp') }}" alt="" width="480" height="360">
   <h1>Đăng ký tài khoản khách hàng</h1>
   {{ errors(error, field_errors or ()) }}
   <form method="post" action="/app/register">

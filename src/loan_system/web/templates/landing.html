@@ -17,6 +17,7 @@
         <a class="button" href="/app/register">Đăng ký để nộp hồ sơ vay</a>
         <a href="/app/login">Tôi đã có tài khoản</a>
       </p>
+      <img class="hero-art" src="{{ url_for('static', path='img/hero.webp') }}" alt="" width="1200" height="800">
     </div>
     <form class="card estimator" method="get" action="/" data-estimate data-ceiling-rate="{{ ceiling_rate }}">
       <h2>Ước tính số tiền trả hằng tháng</h2>
@@ -35,11 +36,11 @@
   <section class="band">
     <h2>Một khoản vay đi qua những bước nào</h2>
     <ol class="journey journey-wide">
-      <li><strong>Nộp hồ sơ vay</strong>Điền thông tin khoản vay, tài chính và tải giấy tờ trong 4 bước, trực tuyến hoặc tại quầy.</li>
-      <li><strong>Chấm điểm và thẩm định</strong>Hệ thống chấm điểm tín dụng, chuyên viên thẩm định lập tờ trình.</li>
-      <li><strong>Phê duyệt</strong>Quản lý phê duyệt quyết định; khoản vay trên 50 triệu đồng cần hai người đồng ý.</li>
-      <li><strong>Giải ngân</strong>Tiền được chuyển vào tài khoản bạn đã khai, kèm hợp đồng vay và lịch trả nợ.</li>
-      <li><strong>Trả nợ và tất toán</strong>Thanh toán từng kỳ trực tuyến hoặc tại quầy, tất toán trước hạn bất cứ lúc nào.</li>
+      <li><img class="spot" src="{{ url_for('static', path='img/step-apply.webp') }}" alt="" width="480" height="360" loading="lazy"><strong>Nộp hồ sơ vay</strong>Điền thông tin khoản vay, tài chính và tải giấy tờ trong 4 bước, trực tuyến hoặc tại quầy.</li>
+      <li><img class="spot" src="{{ url_for('static', path='img/step-score.webp') }}" alt="" width="480" height="360" loading="lazy"><strong>Chấm điểm và thẩm định</strong>Hệ thống chấm điểm tín dụng, chuyên viên thẩm định lập tờ trình.</li>
+      <li><img class="spot" src="{{ url_for('static', path='img/step-approve.webp') }}" alt="" width="480" height="360" loading="lazy"><strong>Phê duyệt</strong>Quản lý phê duyệt quyết định; khoản vay trên 50 triệu đồng cần hai người đồng ý.</li>
+      <li><img class="spot" src="{{ url_for('static', path='img/step-disburse.webp') }}" alt="" width="480" height="360" loading="lazy"><strong>Giải ngân</strong>Tiền được chuyển vào tài khoản bạn đã khai, kèm hợp đồng vay và lịch trả nợ.</li>
+      <li><img class="spot" src="{{ url_for('static', path='img/step-repay.webp') }}" alt="" width="480" height="360" loading="lazy"><strong>Trả nợ và tất toán</strong>Thanh toán từng kỳ trực tuyến hoặc tại quầy, tất toán trước hạn bất cứ lúc nào.</li>
     </ol>
   </section>
 
@@ -66,9 +67,9 @@
   <section class="band">
     <h2>Dữ liệu của bạn được bảo vệ thế nào</h2>
     <ul class="assurances">
-      <li><strong>Mã hóa thông tin nhạy cảm</strong>Số CCCD và thu nhập được mã hóa khi lưu, và che trên màn hình của nhân viên cho đến khi họ có lý do xem.</li>
-      <li><strong>Mỗi bước một người khác nhau</strong>Người tiếp nhận, thẩm định, phê duyệt và giải ngân của cùng một hồ sơ vay phải là những người khác nhau.</li>
-      <li><strong>Mọi thao tác đều để lại dấu vết</strong>Nhật ký kiểm toán ghi lại từng lượt xem và thay đổi, và không thể sửa mà không bị phát hiện.</li>
+      <li><img class="spot" src="{{ url_for('static', path='img/trust-encrypt.webp') }}" alt="" width="480" height="360" loading="lazy"><strong>Mã hóa thông tin nhạy cảm</strong>Số CCCD và thu nhập được mã hóa khi lưu, và che trên màn hình của nhân viên cho đến khi họ có lý do xem.</li>
+      <li><img class="spot" src="{{ url_for('static', path='img/trust-duties.webp') }}" alt="" width="480" height="360" loading="lazy"><strong>Mỗi bước một người khác nhau</strong>Người tiếp nhận, thẩm định, phê duyệt và giải ngân của cùng một hồ sơ vay phải là những người khác nhau.</li>
+      <li><img class="spot" src="{{ url_for('static', path='img/trust-audit.webp') }}" alt="" width="480" height="360" loading="lazy"><strong>Mọi thao tác đều để lại dấu vết</strong>Nhật ký kiểm toán ghi lại từng lượt xem và thay đổi, và không thể sửa mà không bị phát hiện.</li>
     </ul>
   </section>
 </main>

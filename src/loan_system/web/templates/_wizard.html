@@ -3,7 +3,10 @@
 {% from "_macros.html" import csrf_field, errors, need_info_notice with context %}
 {% block title %}Nộp hồ sơ vay{% endblock %}
 {% block content %}
+<div class="heading wizard-heading">
 <h1>{% if application and application.need_info %}Bổ sung hồ sơ vay{% elif user.kind == "EMPLOYEE" %}Nộp hộ hồ sơ vay{% else %}Nộp hồ sơ vay{% endif %}{% if application and application.code %} {{ application.code }}{% endif %}</h1>
+<img class="wizard-art" src="{{ url_for('static', path='img/step-apply.webp') }}" alt="" width="480" height="360">
+</div>
 <ol class="steps">
   {% for key, label in steps %}
   <li{% if key == step %} aria-current="step"{% endif %}>

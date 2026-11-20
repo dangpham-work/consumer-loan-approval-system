@@ -40,7 +40,10 @@
     </tbody>
   </table>
   {% else %}
-  <p class="muted">Không có hồ sơ vay nào phù hợp.</p>
+  <div class="empty">
+    <img src="{{ url_for('static', path='img/empty.webp') }}" alt="" width="640" height="480">
+    <p class="muted">Không có hồ sơ vay nào phù hợp.</p>
+  </div>
   {% endif %}
 </section>
 {% endblock %}

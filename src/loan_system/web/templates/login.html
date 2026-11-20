@@ -3,6 +3,7 @@
 {% block title %}Đăng nhập{% endblock %}
 {% block content %}
 <section class="card narrow">
+  <img class="card-art" src="{{ url_for('static', path='img/trust-encrypt.webp') }}" alt="" width="480" height="360">
   <h1>Đăng nhập</h1>
   {{ errors(error) }}
   <form method="post" action="/app/login">
