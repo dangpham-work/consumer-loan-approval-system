@@ -390,7 +390,37 @@ form.filters > a { padding: 0.55rem 0; }
   color: rgb(200 0 0 / 22%); font-weight: 600; font-size: 1.1rem; user-select: none;
 }
 
+/* Ảnh minh họa (tạo bằng Figma AI, lưu ở static/img); ảnh điểm có nền trong suốt. */
+.hero-art { display: block; width: 100%; max-width: 34rem; height: auto; margin-top: 2rem; border-radius: var(--radius-lg); }
+.spot { display: block; width: 100%; max-width: 12rem; height: auto; margin: 0 0 0.75rem; }
+.assurances .spot { max-width: 13rem; margin-top: -0.25rem; }
+.welcome-art { display: block; width: 100%; max-width: 18rem; height: auto; margin-top: 1.5rem; border-radius: var(--radius-lg); }
+.banner {
+  display: flex;
+  align-items: center;
+  min-height: 13rem;
+  margin-bottom: 1.25rem;
+  padding: 1.75rem 2rem;
+  border-radius: var(--radius-lg);
+  background: var(--primary-bg) var(--banner-art) right center / auto 100% no-repeat;
+  box-shadow: var(--shadow);
+}
+.banner > div { max-width: min(26rem, 48%); }
+.banner h1 { margin-bottom: 0.5rem; color: var(--ink); }
+.banner p { margin: 0 0 1rem; color: var(--ink-soft); }
+.banner p:last-child { margin-bottom: 0; }
+.empty { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.empty img { width: 100%; max-width: 15rem; height: auto; margin-bottom: 0.5rem; }
+.empty p { margin: 0; }
+.card-art { display: block; width: 100%; max-width: 11rem; height: auto; margin: -0.5rem auto 0.75rem; }
+.wizard-heading { flex-wrap: nowrap; }
+.wizard-art { flex-shrink: 0; width: 7.5rem; height: auto; margin: -1rem 0 -0.75rem; }
+
 @media (max-width: 860px) {
+  .hero-art { max-width: 24rem; margin-top: 1.25rem; }
+  .welcome-art, .wizard-art { display: none; }
+  .banner { display: block; min-height: 0; padding: 1.25rem 1.25rem 46%; background-position: center bottom; background-size: 100% auto; }
+  .banner > div { max-width: none; }
   .layout, .layout-guest { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
   .sidebar { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; }
   .sidebar .brand { flex: 1; padding: 0.8rem 1rem; }
@@ -417,7 +447,8 @@ form.filters > a { padding: 0.55rem 0; }
 }
 
 @media print {
-  .sidebar, .welcome, .notices, .skip { display: none; }
+  .sidebar, .welcome, .notices, .skip, .hero-art, .spot, .empty img, .card-art, .wizard-art { display: none; }
+  .banner { background-image: none; }
   .layout { display: block; }
   .card { box-shadow: none; }
 }

@@ -2,6 +2,7 @@
 {% block title %}Lỗi {{ status_code }}{% endblock %}
 {% block content %}
 <section class="card narrow">
+  <img class="card-art" src="{{ url_for('static', path='img/error.webp') }}" alt="" width="640" height="480">
   <h1>Không thực hiện được yêu cầu</h1>
   <p>{{ message }}</p>
   <p><a href="/app">Về trang chủ</a></p>

@@ -30,7 +30,8 @@
 </ul>
 <p class="muted">Hiển thị tối đa 50 thông báo mới nhất.</p>
 {% else %}
-<section class="card">
+<section class="card empty">
+  <img src="{{ url_for('static', path='img/empty-bell.webp') }}" alt="" width="480" height="360">
   <p>Bạn chưa có thông báo nào. Thông báo về hồ sơ vay và khoản vay sẽ xuất hiện ở đây.</p>
 </section>
 {% endif %}

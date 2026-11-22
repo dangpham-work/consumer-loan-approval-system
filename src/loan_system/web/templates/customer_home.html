@@ -2,10 +2,13 @@
 {% from "_macros.html" import badge with context %}
 {% block title %}Trang chủ{% endblock %}
 {% block content %}
-<div class="heading">
-  <h1>Xin chào, {{ user.username }}</h1>
-  {% if can_apply %}<a class="button" href="/app/applications/new">Vay mới</a>{% endif %}
-</div>
+<section class="banner" style="--banner-art: url('{{ url_for('static', path='img/banner-customer.webp') }}')">
+  <div>
+    <h1>Xin chào, {{ user.username }}</h1>
+    <p>Theo dõi hồ sơ vay, lịch trả nợ và thanh toán ở cùng một nơi.</p>
+    {% if can_apply %}<a class="button" href="/app/applications/new">Vay mới</a>{% endif %}
+  </div>
+</section>
 
 {% if loans %}
 <section class="card">
@@ -55,7 +58,10 @@
     </tbody>
   </table>
   {% else %}
-  <p>Bạn chưa có hồ sơ vay nào.</p>
+  <div class="empty">
+    <img src="{{ url_for('static', path='img/empty.webp') }}" alt="" width="640" height="480">
+    <p>Bạn chưa có hồ sơ vay nào.</p>
+  </div>
   {% endif %}
 </section>
 {% endblock %}
