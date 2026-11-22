@@ -1,6 +1,6 @@
 # consumer-loan-approval-system
 
-Hệ thống quản lý và xét duyệt vay tín dụng tiêu dùng, áp dụng OOAD và nguyên lý Security by Design: phân quyền RBAC, tách biệt nhiệm vụ (SoD), mã hóa dữ liệu cá nhân AES-GCM, nhật ký kiểm toán dạng chuỗi băm (hash-chain).
+Hệ thống quản lý và xét duyệt vay tín dụng tiêu dùng, áp dụng OOAD và nguyên lý Security by Design: phân quyền RBAC, tách biệt nhiệm vụ (SoD), mã hóa dữ liệu cá nhân ChaCha20-Poly1305 (ADR 0005), nhật ký kiểm toán dạng chuỗi băm (hash-chain).
 
 Công nghệ: Python 3.12, FastAPI, SQLAlchemy và Alembic, MySQL 8.0.16 trở lên (ADR 0004), giao diện Jinja2. Thuật ngữ nghiệp vụ xem [CONTEXT.md](CONTEXT.md).
 

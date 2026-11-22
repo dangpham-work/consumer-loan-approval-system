@@ -263,3 +263,7 @@ Kết quả phiên hỏi đáp rà soát đề cương `De_cuong_OOAD_Vay_tin_du
 - [ ] **Đường dẫn M11**: `/app/reports?from=…&to=…`, mặc định từ ngày 1 của tháng hiện tại đến hôm nay (giờ Việt Nam). Ngày sai định dạng, ngày kết thúc trước ngày bắt đầu hoặc quá 12 tháng thì 400, hiện thông điệp ngay trên trang và giữ khoảng đã nhập (cùng thông điệp với REST API).
 - [ ] **Biểu đồ** vẽ bằng thanh CSS (độ dài theo giá trị lớn nhất của biểu đồ), không thêm thư viện JavaScript: hồ sơ vay theo trạng thái, khoản vay theo nhóm nợ, hồ sơ vay theo hạng tín dụng. Ô số liệu: tổng hồ sơ vay, tỷ lệ duyệt/từ chối, thời gian xử lý trung bình, tổng giải ngân, dư nợ gốc, tỷ lệ quá hạn; tỷ lệ không tính được (không có dữ liệu) hiện "Chưa có dữ liệu" thay vì 0%.
 - [ ] **Xuất CSV/PDF** ở `/app/reports/export?from=…&to=…&format=CSV|PDF`, đúng khoảng đang xem, ghi `REPORT_EXPORT` như REST API. Khoảng sai thì hiện lại M11 kèm thông điệp, không ghi log.
+
+## Phát sinh khi viết báo cáo ATBMHTTT (ADR 0005)
+
+- [ ] **SR06, mục 4.2.5, mục 5.1**: mã hóa mức trường đổi từ AES-GCM sang ChaCha20-Poly1305 (RFC 8439). Khóa 256 bit dẫn xuất từ `DATA_ENC_KEY` bằng HKDF-SHA256. Byte đầu bản mã là phiên bản định dạng (2 = ChaCha20-Poly1305; 1 = AES-256-GCM chỉ còn để giải mã dữ liệu cũ), nằm trong associated data cùng ngữ cảnh `bảng.cột:id`. Không cần migration; trường được ghi lại sẽ mang định dạng 2.

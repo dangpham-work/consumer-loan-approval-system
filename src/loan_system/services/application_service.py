@@ -44,7 +44,7 @@ from loan_system.repositories.models import (
     Loan,
     LoanApplication,
 )
-from loan_system.security.crypto import FieldCipher, blind_index
+from loan_system.security.crypto import DecryptionFailed, FieldCipher, blind_index
 from loan_system.services.audit_service import AuditService
 from loan_system.services.auth_service import CurrentUser
 from loan_system.services.customer_pii import income_context, national_id_context
@@ -606,9 +606,11 @@ class ApplicationService:
         """
         is_customer = viewer.customer_id is not None
         customer = self._db.get_one(Customer, application.customer_id)
-        account = self._decrypt(application.receiving_account_enc, _account_context(application.id))
-        national_id = self._decrypt(customer.national_id_enc, national_id_context(customer.id))
-        income = self._decrypt(customer.monthly_income_enc, income_context(customer.id))
+        account = self._decrypt_shown(
+            application.receiving_account_enc, _account_context(application.id)
+        )
+        national_id = self._decrypt_shown(customer.national_id_enc, national_id_context(customer.id))
+        income = self._decrypt_shown(customer.monthly_income_enc, income_context(customer.id))
         history = self._db.scalars(
             select(ApplicationStatusHistory)
             .where(ApplicationStatusHistory.application_id == application.id)
@@ -723,6 +725,14 @@ class ApplicationService:
 
     def _decrypt(self, sealed: bytes | None, context: str) -> str | None:
         return self._cipher.decrypt(sealed, context=context) if sealed else None
+
+    def _decrypt_shown(self, sealed: bytes | None, context: str) -> str | None:
+        """Giá trị để hiển thị (đã che). Bản mã bị sửa hoặc chép từ bản ghi khác thì hiện như chưa có
+        thay vì làm hỏng cả trang: việc phát hiện, khóa hồ sơ vay và cảnh báo là của SUC02."""
+        try:
+            return self._decrypt(sealed, context)
+        except DecryptionFailed:
+            return None
 
     def commit(self) -> None:
         """Commit; khóa lạc quan phát hiện ghi đè thì báo ConcurrentModification (409)."""

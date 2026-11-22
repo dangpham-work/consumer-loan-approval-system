@@ -1,4 +1,4 @@
-"""Ngữ cảnh mã hóa (associated data AES-GCM, SR06) cho các trường PII của Customer.
+"""Ngữ cảnh mã hóa (associated data của mã hóa AEAD, SR06) cho các trường PII của Customer.
 
 Dùng chung giữa application_service.py (sửa qua bước lập hồ sơ vay, UC12) và customer_service.py
 (khách hàng tự sửa hồ sơ cá nhân, UC11): chuỗi ngữ cảnh phải khớp hệt giữa lúc mã hóa và lúc giải

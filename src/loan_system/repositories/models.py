@@ -66,8 +66,8 @@ def Money() -> DECIMAL[Decimal]:  # noqa: N802 - tiền tính bằng đồng (4.
     return DECIMAL(15, 0)
 
 
-def Encrypted() -> LargeBinary:  # noqa: N802 - bản mã AES-GCM (SR06)
-    # 1 byte phiên bản khóa + 12 byte nonce + dữ liệu + 16 byte tag.
+def Encrypted() -> LargeBinary:  # noqa: N802 - bản mã AEAD (SR06, ADR 0005)
+    # 1 byte phiên bản định dạng + 12 byte nonce + dữ liệu + 16 byte tag.
     return LargeBinary(500)
 
 
@@ -315,7 +315,7 @@ class OtpChallenge(Base):
     purpose: Mapped[str] = mapped_column(String(30))
     phone: Mapped[str] = mapped_column(String(15))
     subject_id: Mapped[str | None] = mapped_column(String(50))
-    # Dữ liệu chờ xác nhận, mã hóa AES-GCM (SR06); xóa khi thử thách kết thúc.
+    # Dữ liệu chờ xác nhận, mã hóa ChaCha20-Poly1305 (SR06); xóa khi thử thách kết thúc.
     payload_enc: Mapped[bytes | None] = mapped_column(LargeBinary)
     otp_hash: Mapped[str] = mapped_column(Hash64())
     expires_at: Mapped[datetime] = mapped_column(UtcDateTime)

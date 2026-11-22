@@ -1,0 +1,80 @@
+{
+  "environment": {
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cores": "4",
+    "python": "3.12.3",
+    "cryptography": "50.0.1",
+    "openssl": "OpenSSL 4.0.2 25 Aug 2026",
+    "OPENSSL_ia32cap": "~0x200000200000000",
+    "measured_at": "2026-10-28T06:47:42+00:00"
+  },
+  "throughput_mb_s": {
+    "ChaCha20-Poly1305": {
+      "64": 22.24536812886373,
+      "1024": 186.8266935512964,
+      "16384": 606.898234950545,
+      "1048576": 826.117313207073,
+      "5242880": 735.0021119712904
+    },
+    "AES-256-GCM": {
+      "64": 13.896651482381785,
+      "1024": 72.6041594262588,
+      "16384": 149.11506838606397,
+      "1048576": 169.09110109687714,
+      "5242880": 183.14329787242528
+    },
+    "AES-256-CBC + HMAC-SHA256": {
+      "64": 3.1333779739559833,
+      "1024": 33.76063056591497,
+      "16384": 94.88138796997076,
+      "1048576": 119.09977421687285,
+      "5242880": 81.95228962899229
+    }
+  },
+  "field_level_us": {
+    "CCCD (12 B)": {
+      "chacha_encrypt_us": 2.24996231921792,
+      "chacha_decrypt_us": 1.0395803259466614,
+      "aesgcm_encrypt_us": 2.085775784846211,
+      "aesgcm_decrypt_us": 1.5968654623577,
+      "fieldcipher_encrypt_us": 2.7092503246504003,
+      "fieldcipher_decrypt_us": 2.4667817104492595,
+      "stored_bytes": 41
+    },
+    "Tai khoan nhan (14 B)": {
+      "chacha_encrypt_us": 3.3335116743989683,
+      "chacha_decrypt_us": 1.6571347940841066,
+      "aesgcm_encrypt_us": 3.0977422541295243,
+      "aesgcm_decrypt_us": 2.1053754333462393,
+      "fieldcipher_encrypt_us": 3.9548260966129702,
+      "fieldcipher_decrypt_us": 3.012838112185766,
+      "stored_bytes": 43
+    },
+    "Khoa TOTP (32 B)": {
+      "chacha_encrypt_us": 2.4712547571901022,
+      "chacha_decrypt_us": 1.4690587167459515,
+      "aesgcm_encrypt_us": 2.2206440553416336,
+      "aesgcm_decrypt_us": 1.8548761035842378,
+      "fieldcipher_encrypt_us": 3.417811268735481,
+      "fieldcipher_decrypt_us": 2.5988174769128585,
+      "stored_bytes": 61
+    },
+    "Du lieu cho OTP (~300 B)": {
+      "chacha_encrypt_us": 2.600683676804043,
+      "chacha_decrypt_us": 1.3951610543457735,
+      "aesgcm_encrypt_us": 3.325493504236496,
+      "aesgcm_decrypt_us": 2.817620460692036,
+      "fieldcipher_encrypt_us": 2.220140420793794,
+      "fieldcipher_decrypt_us": 1.6973649849452261,
+      "stored_bytes": 327
+    }
+  },
+  "supporting": {
+    "argon2id_hash_ms": 64.82031666667656,
+    "argon2id_verify_ms": 64.42118906250016,
+    "hmac_blind_index_us": 2.187230863573853,
+    "totp_verify_us": 11.761542853925953,
+    "field_cipher_init_us": 8.204143063358462,
+    "audit_chain_verify_10000_ms": 65.72392273331691
+  }
+}

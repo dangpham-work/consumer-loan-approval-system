@@ -21,6 +21,7 @@ from tests.api.test_approval import pending_approval
 from tests.api.test_disbursement import (
     ACCOUNT,
     approved,
+    tamper_receiving_account,
     tamper_requested_amount,
     trigger_disabled,
 )
@@ -269,6 +270,23 @@ def test_st04_tampered_application_shows_red_integrity_and_is_locked(
     assert "Toàn vẹn: không khớp" in again.text
     assert "Bị khóa" in again.text
     assert 'name="otp"' not in again.text
+
+
+def test_st04_tampered_account_ciphertext_shows_red_integrity_instead_of_an_error(
+    team: Team, customer: TestClient, engine: Engine
+) -> None:
+    disburser = team.disburser.client
+    app_id = approved(team, customer)
+    with trigger_disabled(engine):
+        tamper_receiving_account(engine, app_id)
+
+    page = disburser.get(f"/app/queue/{app_id}/disbursement")
+
+    assert page.status_code == 409
+    assert "Toàn vẹn: không khớp" in page.text
+    assert 'name="otp"' not in page.text
+    assert status_of(customer, app_id) == "LOCKED"
+    assert disburser.get(f"/app/queue/{app_id}").status_code == 200
 
 
 def test_refused_transfer_shows_failed_and_can_be_cancelled_to_redo(
